@@ -44,7 +44,8 @@ if (isConfigured) {
   }
 }
 
-// --- HOOK PARA LONG PRESS (Mantener presionado) ---
+// --- HOOKS Y HELPERS ---
+
 function useLongPress(callback = () => {}, ms = 600) {
   const [startLongPress, setStartLongPress] = useState(false);
   const timerId = useRef();
@@ -52,7 +53,7 @@ function useLongPress(callback = () => {}, ms = 600) {
   const start = React.useCallback(() => {
     setStartLongPress(true);
     timerId.current = setTimeout(() => {
-      if (navigator.vibrate) navigator.vibrate(50); // Pequeña vibración háptica
+      if (navigator.vibrate) navigator.vibrate(50);
       callback();
     }, ms);
   }, [callback, ms]);
@@ -71,6 +72,14 @@ function useLongPress(callback = () => {}, ms = 600) {
   };
 }
 
+const getPlatformColor = (p) => {
+  const map = {
+    'Netflix': 'red', 'Amazon Prime': 'blue', 'Disney+': 'blue', 
+    'Crunchyroll': 'yellow', 'Apple TV': 'gray', 'Paramount+': 'blue'
+  };
+  return map[p] || 'violet';
+};
+
 // --- COMPONENTES UI ---
 
 const Button = ({ children, onClick, variant = 'primary', className = '', ...props }) => {
@@ -82,13 +91,10 @@ const Button = ({ children, onClick, variant = 'primary', className = '', ...pro
     ghost: "text-gray-400 hover:text-white hover:bg-white/5",
     outline: "border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white",
     install: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-900/30 hover:brightness-110",
-    action: "bg-gray-700 hover:bg-gray-600 text-white shadow-lg border border-gray-600" // Para los botones de subir/bajar
+    action: "bg-gray-700 hover:bg-gray-600 text-white shadow-lg border border-gray-600"
   };
-  
-  const variantClass = variants[variant] || variants.primary;
-
   return (
-    <button onClick={onClick} className={`${baseStyle} ${variantClass} ${className}`} {...props}>
+    <button onClick={onClick} className={`${baseStyle} ${variants[variant] || variants.primary} ${className}`} {...props}>
       {children}
     </button>
   );
@@ -103,26 +109,83 @@ const Badge = ({ children, color = 'gray' }) => {
     gray: 'bg-gray-700/50 text-gray-300 border-gray-600',
     yellow: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
   };
-  const selectedColor = colors[color] || colors.gray;
-
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${selectedColor} uppercase tracking-wider`}>
+    <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${colors[color] || colors.gray} uppercase tracking-wider`}>
       {children}
     </span>
+  );
+};
+
+// --- SUB-COMPONENTE TARJETA (CRÍTICO PARA ARREGLAR EL ERROR DE PANTALLA NEGRA) ---
+const MediaCard = ({ item, activeTab, reorderModeId, handlers, searchQuery }) => {
+  // El hook useLongPress AHORA SÍ es válido aquí porque esto es un componente real
+  const longPressProps = useLongPress(() => handlers.onLongPress(item.id), 600);
+
+  // Desactivar long press si hay búsqueda o filtros activos para evitar conflictos
+  const isInteractable = !reorderModeId && !searchQuery;
+  const interactionProps = isInteractable ? longPressProps : {};
+
+  return (
+    <div 
+      {...interactionProps}
+      className="group bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-violet-900/10 hover:border-violet-500/30 transition-all duration-300 flex flex-col relative select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      
+      {/* CAPA DE REORDENAMIENTO */}
+      {reorderModeId === item.id && (
+        <div className="absolute inset-0 z-50 bg-gray-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
+          <p className="text-violet-300 font-bold text-lg mb-2">Mover</p>
+          <div className="flex gap-4">
+            <Button variant="action" onClick={() => handlers.onMove(item.id, -1)} className="!p-4 rounded-full"><ArrowUp size={32} /></Button>
+            <Button variant="action" onClick={() => handlers.onMove(item.id, 1)} className="!p-4 rounded-full"><ArrowDown size={32} /></Button>
+          </div>
+          <button onClick={handlers.onCancelReorder} className="mt-4 text-gray-400 hover:text-white flex items-center gap-2 text-sm"><X size={16}/> Terminar</button>
+        </div>
+      )}
+
+      <div className="p-5 flex-1 relative">
+        {activeTab === 'watchlist' && (
+          <button onClick={() => handlers.onEdit(item)} className="absolute top-4 right-4 text-gray-600 hover:text-violet-400 opacity-0 group-hover:opacity-100 transition-all" title="Editar"><Edit2 size={20} /></button>
+        )}
+        <div className="flex justify-between items-start mb-3 pr-8">
+          <Badge color={getPlatformColor(item.platform)}>{item.platform}</Badge>
+          {item.type === 'movie' ? <Film size={20} className="text-gray-500" /> : <Tv size={20} className="text-gray-500" />}
+        </div>
+        <h3 className="text-xl font-bold text-gray-100 leading-tight mb-2 group-hover:text-violet-400 transition-colors">{item.title}</h3>
+        {activeTab === 'history' && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5 text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded"><Star size={16} fill="currentColor" /><span className="text-base">{item.rating}</span></div>
+              <div className="flex items-center gap-1.5 text-gray-500"><Calendar size={16} /><span>{new Date(item.watchedAt || '').toLocaleDateString()}</span></div>
+            </div>
+            {item.review && <div className="relative pl-3 border-l-2 border-gray-700 pt-1"><p className="text-sm text-gray-400 italic line-clamp-3 leading-relaxed">"{item.review}"</p></div>}
+          </div>
+        )}
+      </div>
+      <div className="px-5 py-4 bg-gray-950/30 border-t border-gray-800 flex items-center justify-between">
+        {activeTab === 'watchlist' ? (
+          <>
+            <button onClick={() => handlers.onDelete(item.id)} className="text-gray-500 hover:text-red-400 transition-colors p-2 hover:bg-red-500/10 rounded-lg" title="Eliminar"><Trash2 size={20} /></button>
+            <Button variant="primary" onClick={() => handlers.onRate(item)} className="!py-2 !px-4 !text-sm shadow-md"><CheckCircle size={16} /> Ya la vi</Button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => handlers.onDelete(item.id)} className="text-gray-500 hover:text-red-400 transition-colors text-sm flex items-center gap-1.5 hover:bg-red-500/10 px-2 py-1 rounded"><Trash2 size={16} /> Borrar</button>
+            <div className="text-xs text-gray-600 font-mono flex items-center gap-1"><Cloud size={12}/> Synced</div>
+          </>
+        )}
+      </div>
+    </div>
   );
 };
 
 // --- APP PRINCIPAL ---
 
 export default function App() {
-  
-  // Lógica de PWA e Inyección de Estilos
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
       script.id = 'tailwind-script';
@@ -169,7 +232,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Estados de Interfaz
+  // Estados UI
   const [activeTab, setActiveTab] = useState('watchlist'); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
@@ -177,8 +240,6 @@ export default function App() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [itemToRate, setItemToRate] = useState(null);
-  
-  // Estado para REORDENAR (Nuevo)
   const [reorderModeId, setReorderModeId] = useState(null);
 
   // Filtros
@@ -212,7 +273,7 @@ export default function App() {
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // Carga de datos con ORDENAMIENTO
+  // Carga de datos
   useEffect(() => {
     if (!isConfigured || !user || !listCode) {
       setLoading(false);
@@ -228,11 +289,10 @@ export default function App() {
         ...doc.data()
       }));
 
-      // Ordenar: Usamos el campo 'order' si existe, si no, 'createdAt'
+      // Ordenar por campo 'order' o timestamp
       fetchedItems.sort((a, b) => {
         const orderA = a.order ?? a.createdAt?.seconds ?? 0;
         const orderB = b.order ?? b.createdAt?.seconds ?? 0;
-        // Orden descendente (más nuevo/alto arriba)
         return orderB - orderA; 
       });
 
@@ -252,42 +312,37 @@ export default function App() {
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // --- LÓGICA DE REORDENAMIENTO ---
+  // Funciones de manejo
   const moveItem = async (itemId, direction) => {
-    // direction: -1 (Subir, visualmente hacia arriba, índice menor en pantalla, pero mayor valor de 'order')
-    // Espera, el sort es DESCENDENTE (B - A). 
-    // Item arriba tiene MAYOR order. Item abajo tiene MENOR order.
-    // Subir = Incrementar orden (swap con el de arriba).
-    // Bajar = Decrementar orden (swap con el de abajo).
-
     const currentIndex = items.findIndex(i => i.id === itemId);
     if (currentIndex === -1) return;
-
-    // Calculamos el índice destino en el array visual
-    // Si direction es "up" (-1 en el array visual), queremos ir al índice 0
-    const targetIndex = currentIndex + direction;
-
-    if (targetIndex < 0 || targetIndex >= items.length) return; // Fuera de limites
+    
+    // Dirección: -1 es subir (hacia índices menores en la UI, pero mayor valor de 'order')
+    // Nota: La lista está ordenada descendente (B - A). El primer item tiene el order más alto.
+    // Subir visualmente = Ir hacia el índice 0 = Necesitamos un valor de 'order' más alto.
+    
+    const targetIndex = currentIndex + direction; // direction -1 para subir visualmente
+    if (targetIndex < 0 || targetIndex >= items.length) return;
 
     const currentItem = items[currentIndex];
     const targetItem = items[targetIndex];
 
-    // Valores de orden actuales (fallback a timestamp si no hay orden)
     const currentOrderVal = currentItem.order ?? currentItem.createdAt?.seconds ?? Date.now();
     const targetOrderVal = targetItem.order ?? targetItem.createdAt?.seconds ?? Date.now();
 
-    // Si los valores son iguales (raro pero posible), forzamos una diferencia
-    let newCurrentOrder = targetOrderVal;
-    let newTargetOrder = currentOrderVal;
-
-    if (newCurrentOrder === newTargetOrder) {
-       newCurrentOrder = newCurrentOrder + (direction === -1 ? 1 : -1); 
-    }
-
+    // Intercambiamos los valores de orden
     try {
       const batch = writeBatch(db);
       const currentRef = doc(db, 'cinelist', currentItem.id);
       const targetRef = doc(db, 'cinelist', targetItem.id);
+
+      // Si los valores son iguales, ajustamos
+      let newCurrentOrder = targetOrderVal;
+      let newTargetOrder = currentOrderVal;
+      
+      if (newCurrentOrder === newTargetOrder) {
+         newCurrentOrder += (direction === -1 ? 1 : -1);
+      }
 
       batch.update(currentRef, { order: newCurrentOrder });
       batch.update(targetRef, { order: newTargetOrder });
@@ -299,92 +354,53 @@ export default function App() {
   };
 
   const handleLongPress = (id) => {
-    // Solo permitir reordenar en la lista principal y si no estamos filtrando (para evitar confusiones)
     if (activeTab === 'watchlist' && filterType === 'all' && filterPlatform === 'all' && !searchQuery) {
       setReorderModeId(id);
     } else if (activeTab === 'watchlist') {
-      alert("Para reordenar, elimina los filtros de búsqueda primero.");
+      alert("Elimina los filtros para reordenar.");
     }
   };
-
-  const longPressEvents = (id) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useLongPress(() => handleLongPress(id), 600); // 600ms para activar
-  };
-
-  // --- OTRAS ACCIONES ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault();
     if (!newItem.title.trim()) return;
-    if (!user) return alert("No estás conectado.");
     setSaving(true);
     try {
       const collectionRef = collection(db, 'cinelist');
-      // Nuevo item obtiene el orden máximo actual + 1000 para quedar arriba
+      // Nuevo item arriba (mayor orden)
       const maxOrder = items.length > 0 ? (items[0].order ?? items[0].createdAt?.seconds ?? Date.now()) : Date.now();
       
       if (isEditing && editingId) {
-        const docRef = doc(db, 'cinelist', editingId);
-        await updateDoc(docRef, { title: newItem.title, type: newItem.type, platform: newItem.platform });
+        await updateDoc(doc(db, 'cinelist', editingId), { title: newItem.title, type: newItem.type, platform: newItem.platform });
       } else {
         await addDoc(collectionRef, {
-          listId: listCode,
-          title: newItem.title,
-          type: newItem.type,
-          platform: newItem.platform,
-          status: 'pending',
-          addedAt: new Date().toISOString(),
-          createdAt: serverTimestamp(),
-          order: maxOrder + 1000, // Asegura que quede primero
-          watchedAt: null,
-          rating: null,
-          review: null
+          listId: listCode, title: newItem.title, type: newItem.type, platform: newItem.platform, status: 'pending',
+          addedAt: new Date().toISOString(), createdAt: serverTimestamp(), order: maxOrder + 1000,
+          watchedAt: null, rating: null, review: null
         });
       }
-      setIsModalOpen(false);
-      setNewItem({ title: '', type: 'series', platform: platforms[0] });
-      setIsEditing(false);
-      setEditingId(null);
-    } catch (error) { alert(`Error al guardar: ${error.message}`); } finally { setSaving(false); }
+      setIsModalOpen(false); setNewItem({ title: '', type: 'series', platform: platforms[0] }); setIsEditing(false); setEditingId(null);
+    } catch (error) { alert(`Error: ${error.message}`); } finally { setSaving(false); }
   };
 
   const confirmRatingCloud = async (e) => {
-    e.preventDefault();
-    if (!itemToRate) return;
-    setSaving(true);
+    e.preventDefault(); if (!itemToRate) return; setSaving(true);
     try {
-      const docRef = doc(db, 'cinelist', itemToRate.id);
-      await updateDoc(docRef, { status: 'watched', rating: Number(ratingData.rating), watchedAt: ratingData.date, review: ratingData.review });
-      setIsRateModalOpen(false);
-      setItemToRate(null);
+      await updateDoc(doc(db, 'cinelist', itemToRate.id), { status: 'watched', rating: Number(ratingData.rating), watchedAt: ratingData.date, review: ratingData.review });
+      setIsRateModalOpen(false); setItemToRate(null);
     } catch (error) { alert(`Error: ${error.message}`); } finally { setSaving(false); }
   };
 
   const deleteItemCloud = async (id) => {
-    if (window.confirm('¿Eliminar para ambos usuarios?')) {
-      try { await deleteDoc(doc(db, 'cinelist', id)); } catch (error) { alert(`Error: ${error.message}`); }
-    }
+    if (window.confirm('¿Eliminar?')) { try { await deleteDoc(doc(db, 'cinelist', id)); } catch (e) { alert(e.message); } }
   };
 
   const handleJoinList = (e) => {
-    e.preventDefault();
-    if (inputCode.trim().length < 3) return alert("El código debe tener al menos 3 caracteres");
-    localStorage.setItem('cinelist_code', inputCode.trim().toUpperCase());
-    setListCode(inputCode.trim().toUpperCase());
+    e.preventDefault(); if (inputCode.trim().length < 3) return alert("Mínimo 3 caracteres");
+    const code = inputCode.trim().toUpperCase(); localStorage.setItem('cinelist_code', code); setListCode(code);
   };
 
-  const handleLogoutList = () => {
-    if (window.confirm("¿Salir de esta lista?")) {
-      localStorage.removeItem('cinelist_code');
-      setListCode('');
-      setItems([]);
-    }
-  };
-
-  const openAddModal = () => { setIsEditing(false); setEditingId(null); setNewItem({ title: '', type: 'series', platform: platforms[0] }); setIsModalOpen(true); };
-  const openEditModal = (item) => { setIsEditing(true); setEditingId(item.id); setNewItem({ title: item.title, type: item.type, platform: item.platform }); setIsModalOpen(true); };
-  const initiateRateItem = (item) => { setItemToRate(item); setRatingData({ rating: 8, date: new Date().toISOString().split('T')[0], review: '' }); setIsRateModalOpen(true); };
+  const handleLogoutList = () => { if (window.confirm("¿Salir?")) { localStorage.removeItem('cinelist_code'); setListCode(''); setItems([]); } };
 
   const getFilteredItems = () => {
     let filtered = items.filter(i => {
@@ -395,21 +411,14 @@ export default function App() {
       return statusMatch && typeMatch && platformMatch && searchMatch;
     });
     if (activeTab === 'history') {
-      filtered.sort((a, b) => {
-        if (sortHistoryBy === 'rating') return (b.rating || 0) - (a.rating || 0); 
-        if (sortHistoryBy === 'date') return new Date(b.watchedAt || '').getTime() - new Date(a.watchedAt || '').getTime();
-        return 0;
-      });
+      filtered.sort((a, b) => sortHistoryBy === 'rating' ? (b.rating || 0) - (a.rating || 0) : new Date(b.watchedAt || '').getTime() - new Date(a.watchedAt || '').getTime());
     }
     return filtered;
   };
 
-  const getPlatformColor = (p) => {
-    const map = { 'Netflix': 'red', 'Amazon Prime': 'blue', 'Disney+': 'blue', 'Crunchyroll': 'yellow', 'Apple TV': 'gray', 'Paramount+': 'blue' };
-    return map[p] || 'violet';
-  };
-
   const filteredItems = getFilteredItems();
+
+  // --- VISTAS ---
 
   if (!listCode) {
     return (
@@ -419,10 +428,7 @@ export default function App() {
           <h1 className="text-2xl font-bold text-white mb-2">Bienvenido a CineList Pro</h1>
           <p className="text-gray-400 mb-8">Para empezar, crea un código único o ingresa el código de tu pareja.</p>
           <form onSubmit={handleJoinList} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Nombre de tu lista (Código)</label>
-              <input type="text" placeholder="Ej: ERNESTO-CASA" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg tracking-widest uppercase focus:ring-2 focus:ring-violet-500 outline-none placeholder-gray-700" value={inputCode} onChange={e => setInputCode(e.target.value)} />
-            </div>
+            <div><label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Nombre de tu lista (Código)</label><input type="text" placeholder="Ej: ERNESTO-CASA" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg tracking-widest uppercase focus:ring-2 focus:ring-violet-500 outline-none placeholder-gray-700" value={inputCode} onChange={e => setInputCode(e.target.value)} /></div>
             <Button type="submit" className="w-full py-3 px-6 text-lg">Entrar a la Lista</Button>
           </form>
           {deferredPrompt && <div className="mt-6 pt-6 border-t border-gray-800"><Button variant="install" onClick={handleInstallClick} className="w-full"><Download size={18} /> Instalar App</Button></div>}
@@ -452,7 +458,7 @@ export default function App() {
               <button onClick={() => setActiveTab('watchlist')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'watchlist' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>Por Ver</button>
               <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'history' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>Historial</button>
             </nav>
-            <Button onClick={openAddModal} className="!py-4 !px-6 !text-lg !rounded-xl shadow-violet-900/40" disabled={!!authError}><Plus size={24} /> <span className="hidden sm:inline">Agregar</span></Button>
+            <Button onClick={() => { setIsEditing(false); setEditingId(null); setNewItem({ title: '', type: 'series', platform: platforms[0] }); setIsModalOpen(true); }} className="!py-4 !px-6 !text-lg !rounded-xl shadow-violet-900/40" disabled={!!authError}><Plus size={24} /> <span className="hidden sm:inline">Agregar</span></Button>
           </div>
         </div>
       </header>
@@ -492,63 +498,26 @@ export default function App() {
                 <Film size={56} className="mx-auto text-gray-700 mb-4" />
                 <h3 className="text-xl font-bold text-gray-400">{searchQuery ? 'No se encontraron resultados' : 'Lista vacía'}</h3>
                 <p className="text-gray-500 mt-2 mb-8 max-w-sm mx-auto text-base">{searchQuery ? 'Intenta con otro término' : 'Esta lista se podra compartir en varios dispositivos si tienen el mismo codigo.'}</p>
-                {!searchQuery && <Button variant="outline" onClick={openAddModal} className="!px-6 !py-3">Agregar Título</Button>}
+                {!searchQuery && <Button variant="outline" onClick={() => { setIsEditing(false); setEditingId(null); setNewItem({ title: '', type: 'series', platform: platforms[0] }); setIsModalOpen(true); }} className="!px-6 !py-3">Agregar Título</Button>}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredItems.map(item => (
-                  <div 
+                  <MediaCard 
                     key={item.id} 
-                    {...longPressEvents(item.id)} // EVENTO DE LONG PRESS AQUÍ
-                    className="group bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-violet-900/10 hover:border-violet-500/30 transition-all duration-300 flex flex-col relative select-none"
-                    onContextMenu={(e) => e.preventDefault()} // Evitar menú del navegador
-                  >
-                    
-                    {/* --- CAPA DE REORDENAMIENTO --- */}
-                    {reorderModeId === item.id && (
-                      <div className="absolute inset-0 z-50 bg-gray-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
-                        <p className="text-violet-300 font-bold text-lg mb-2">Mover</p>
-                        <div className="flex gap-4">
-                          <Button variant="action" onClick={() => moveItem(item.id, -1)} className="!p-4 rounded-full"><ArrowUp size={32} /></Button>
-                          <Button variant="action" onClick={() => moveItem(item.id, 1)} className="!p-4 rounded-full"><ArrowDown size={32} /></Button>
-                        </div>
-                        <button onClick={() => setReorderModeId(null)} className="mt-4 text-gray-400 hover:text-white flex items-center gap-2 text-sm"><X size={16}/> Cancelar</button>
-                      </div>
-                    )}
-
-                    <div className="p-5 flex-1 relative">
-                      {activeTab === 'watchlist' && (
-                        <button onClick={() => openEditModal(item)} className="absolute top-4 right-4 text-gray-600 hover:text-violet-400 opacity-0 group-hover:opacity-100 transition-all" title="Editar"><Edit2 size={20} /></button>
-                      )}
-                      <div className="flex justify-between items-start mb-3 pr-8">
-                        <Badge color={getPlatformColor(item.platform)}>{item.platform}</Badge>
-                        {item.type === 'movie' ? <Film size={20} className="text-gray-500" /> : <Tv size={20} className="text-gray-500" />}
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-100 leading-tight mb-2 group-hover:text-violet-400 transition-colors">{item.title}</h3>
-                      {activeTab === 'history' && (
-                        <div className="mt-4 space-y-3">
-                          <div className="flex items-center gap-4 text-sm">
-                            <div className="flex items-center gap-1.5 text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded"><Star size={16} fill="currentColor" /><span className="text-base">{item.rating}</span></div>
-                            <div className="flex items-center gap-1.5 text-gray-500"><Calendar size={16} /><span>{new Date(item.watchedAt || '').toLocaleDateString()}</span></div>
-                          </div>
-                          {item.review && <div className="relative pl-3 border-l-2 border-gray-700 pt-1"><p className="text-sm text-gray-400 italic line-clamp-3 leading-relaxed">"{item.review}"</p></div>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="px-5 py-4 bg-gray-950/30 border-t border-gray-800 flex items-center justify-between">
-                      {activeTab === 'watchlist' ? (
-                        <>
-                          <button onClick={() => deleteItemCloud(item.id)} className="text-gray-500 hover:text-red-400 transition-colors p-2 hover:bg-red-500/10 rounded-lg" title="Eliminar"><Trash2 size={20} /></button>
-                          <Button variant="primary" onClick={() => initiateRateItem(item)} className="!py-2 !px-4 !text-sm shadow-md"><CheckCircle size={16} /> Ya la vi</Button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => deleteItemCloud(item.id)} className="text-gray-500 hover:text-red-400 transition-colors text-sm flex items-center gap-1.5 hover:bg-red-500/10 px-2 py-1 rounded"><Trash2 size={16} /> Borrar</button>
-                          <div className="text-xs text-gray-600 font-mono flex items-center gap-1"><Cloud size={12}/> Synced</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                    item={item} 
+                    activeTab={activeTab}
+                    reorderModeId={reorderModeId}
+                    searchQuery={searchQuery}
+                    handlers={{
+                      onLongPress: handleLongPress,
+                      onMove: moveItem,
+                      onCancelReorder: () => setReorderModeId(null),
+                      onEdit: (i) => { setIsEditing(true); setEditingId(i.id); setNewItem({ title: i.title, type: i.type, platform: i.platform }); setIsModalOpen(true); },
+                      onDelete: deleteItemCloud,
+                      onRate: (i) => { setItemToRate(i); setRatingData({ rating: 8, date: new Date().toISOString().split('T')[0], review: '' }); setIsRateModalOpen(true); }
+                    }}
+                  />
                 ))}
               </div>
             )}
