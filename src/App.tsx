@@ -20,14 +20,7 @@ import {
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
 // Ernesto: Pega aquí los valores que copiaste de tu consola de Firebase.
 // Asegúrate de mantener las comillas "" alrededor de cada código.
-const firebaseConfig = {
-  apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
-  authDomain: "que-ver-4f4b6.firebaseapp.com",
-  projectId: "que-ver-4f4b6",
-  storageBucket: "que-ver-4f4b6.firebasestorage.app",
-  messagingSenderId: "70647074088",
-  appId: "1:70647074088:web:77fbdeecae7ddc557a141d"
-};
+
 
 // Detectamos si la configuración sigue siendo la de ejemplo
 const isConfigured = firebaseConfig.apiKey !== "TU_API_KEY_PEGA_AQUI";
