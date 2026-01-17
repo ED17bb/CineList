@@ -19,7 +19,6 @@ import {
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
 // Ernesto: Pega aquí los valores que copiaste de tu consola de Firebase.
-// Asegúrate de mantener las comillas "" alrededor de cada código.
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -29,10 +28,8 @@ const firebaseConfig = {
   appId: "1:70647074088:web:77fbdeecae7ddc557a141d"
 };
 
-// Detectamos si la configuración sigue siendo la de ejemplo
 const isConfigured = firebaseConfig.apiKey !== "TU_API_KEY_PEGA_AQUI";
 
-// Inicialización condicional para evitar errores si no hay config
 let app, auth, db;
 if (isConfigured) {
   try {
@@ -43,7 +40,6 @@ if (isConfigured) {
     console.error("Error inicializando Firebase:", e);
   }
 }
-// Definimos un ID fijo para tu app personal
 const appId = 'cine-list-pro-movil'; 
 
 // --- COMPONENTES UI ---
@@ -89,16 +85,7 @@ const Badge = ({ children, color = 'gray' }) => {
 
 export default function App() {
   
-  // Inyección automática de Tailwind CSS (Estilos)
-  useEffect(() => {
-    const scriptId = 'tailwindcss-cdn';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
-  }, []);
+  // (El useEffect de inyección de estilos fue eliminado porque ahora usamos la configuración nativa)
 
   // Si no está configurado, mostramos pantalla de ayuda
   if (!isConfigured) {
@@ -113,8 +100,8 @@ export default function App() {
           <div className="bg-gray-950 rounded-xl p-4 text-left text-sm space-y-3 border border-gray-800 mb-6">
             <p className="font-bold text-gray-300">Instrucciones:</p>
             <ol className="list-decimal list-inside space-y-2 text-gray-400">
-              <li>Abre el archivo <code>App.jsx</code> (este archivo).</li>
-              <li>Busca <code>const firebaseConfig</code> (al inicio).</li>
+              <li>Abre el archivo <code>src/App.jsx</code>.</li>
+              <li>Busca <code>const firebaseConfig</code> (al principio).</li>
               <li>Reemplaza los valores con los de tu consola de Firebase.</li>
             </ol>
           </div>
