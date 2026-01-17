@@ -14,7 +14,7 @@ import {
 import { 
   Plus, Film, Tv, Trash2, CheckCircle, Star, Calendar, 
   Search, Filter, MonitorPlay, X, Edit2, LogOut, 
-  Users, Cloud, Loader2, Settings, WifiOff, AlertTriangle
+  Users, Cloud, Loader2, Settings, AlertTriangle, Hash
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
@@ -43,7 +43,8 @@ if (isConfigured) {
 // --- COMPONENTES UI ---
 
 const Button = ({ children, onClick, variant = 'primary', className = '', ...props }) => {
-  const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed";
+  // Aumentamos padding base y tamaño de fuente
+  const baseStyle = "px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base active:scale-95";
   const variants = {
     primary: "bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-900/20",
     secondary: "bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700",
@@ -51,7 +52,9 @@ const Button = ({ children, onClick, variant = 'primary', className = '', ...pro
     ghost: "text-gray-400 hover:text-white hover:bg-white/5",
     outline: "border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white"
   };
+  
   const variantClass = variants[variant] || variants.primary;
+
   return (
     <button onClick={onClick} className={`${baseStyle} ${variantClass} ${className}`} {...props}>
       {children}
@@ -69,6 +72,7 @@ const Badge = ({ children, color = 'gray' }) => {
     yellow: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
   };
   const selectedColor = colors[color] || colors.gray;
+
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${selectedColor} uppercase tracking-wider`}>
       {children}
@@ -152,20 +156,21 @@ export default function App() {
     if (!isConfigured) return;
     const initAuth = async () => {
       try {
-        await signInAnonymously(auth);
+        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+           await signInWithCustomToken(auth, window.__initial_auth_token);
+        } else {
+           await signInAnonymously(auth);
+        }
       } catch (error) {
         console.error("Auth error:", error);
-        setAuthError("Error de autenticación. Verifica la consola de Firebase.");
+        setAuthError(error.message);
       }
     };
     initAuth();
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) setAuthError(null);
-    });
+    return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // Carga de datos (Ruta simplificada)
+  // Carga de datos
   useEffect(() => {
     if (!isConfigured || !user || !listCode) {
       setLoading(false);
@@ -173,7 +178,6 @@ export default function App() {
     }
 
     setLoading(true);
-    // CAMBIO IMPORTANTE: Ruta simple 'cinelist'
     const collectionRef = collection(db, 'cinelist');
 
     const unsubscribe = onSnapshot(collectionRef, (snapshot) => {
@@ -194,30 +198,19 @@ export default function App() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching:", error);
-      if(error.code === 'permission-denied') {
-         setAuthError("Faltan permisos. ¿Creaste la base de datos en modo prueba?");
-      } else if (error.code === 'unavailable') {
-         setAuthError("No se puede conectar a Firebase. Revisa tu internet o configuración.");
-      }
+      if(error.code === 'permission-denied') setAuthError("Permiso denegado.");
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // Helper para timeout
   const timeoutPromise = (ms, promise) => {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error("La conexión es muy lenta o la base de datos no responde."));
+        reject(new Error("La conexión es lenta."));
       }, ms);
-      promise.then(value => {
-        clearTimeout(timer);
-        resolve(value);
-      }).catch(reason => {
-        clearTimeout(timer);
-        reject(reason);
-      });
+      promise.then(value => { clearTimeout(timer); resolve(value); }).catch(reason => { clearTimeout(timer); reject(reason); });
     });
   };
 
@@ -231,11 +224,9 @@ export default function App() {
     setSaving(true);
 
     try {
-      // CAMBIO IMPORTANTE: Ruta simple 'cinelist'
       const collectionRef = collection(db, 'cinelist');
       
-      // Promesa con timeout de 5 segundos para que no gire eternamente
-      await timeoutPromise(5000, (async () => {
+      await timeoutPromise(8000, (async () => {
         if (isEditing && editingId) {
           const docRef = doc(db, 'cinelist', editingId);
           await updateDoc(docRef, {
@@ -264,8 +255,7 @@ export default function App() {
       setIsEditing(false);
       setEditingId(null);
     } catch (error) {
-      console.error("Error:", error);
-      alert(`Error al guardar: ${error.message}\n\nAsegúrate de haber creado la 'Firestore Database' en la consola.`);
+      alert(`Error al guardar: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -369,6 +359,8 @@ export default function App() {
 
   const filteredItems = getFilteredItems();
 
+  // --- VISTAS ---
+
   if (!listCode) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
@@ -415,35 +407,67 @@ export default function App() {
         </div>
       )}
 
+      {/* HEADER PRINCIPAL */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-             <div className="bg-violet-600/20 p-2 rounded-lg">
+        <div className="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between gap-4">
+          
+          {/* Logo y Código de Lista (VISIBLE AHORA SIEMPRE) */}
+          <div className="flex flex-col">
+             <div className="flex items-center gap-2 text-white font-bold text-lg leading-none">
                <Cloud size={20} className="text-violet-400" />
+               CineList Pro
              </div>
-             <div className="hidden sm:block">
-               <h1 className="text-sm font-bold text-white leading-none">CineList Cloud</h1>
-               <span className="text-xs text-violet-400 font-mono tracking-wider">{listCode}</span>
+             {/* Aquí mostramos el código de la lista claramente */}
+             <div className="flex items-center gap-1 text-violet-400 text-xs mt-1 bg-violet-900/20 px-2 py-0.5 rounded-md w-fit font-mono tracking-wider">
+               <Hash size={10} />
+               {listCode}
              </div>
           </div>
 
-          <nav className="flex items-center gap-1 bg-gray-950/50 p-1 rounded-xl border border-gray-800">
-            <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'watchlist' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}>Por Ver</button>
-            <button onClick={() => setActiveTab('history')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}>Historial</button>
+          {/* Navegación Principal (BOTONES GRANDES) */}
+          <nav className="flex items-center gap-2 bg-gray-950/50 p-1.5 rounded-2xl border border-gray-800">
+            <button 
+              onClick={() => setActiveTab('watchlist')} 
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'watchlist' 
+                  ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' 
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+              }`}
+            >
+              Por Ver
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')} 
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'history' 
+                  ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' 
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+              }`}
+            >
+              Historial
+            </button>
           </nav>
 
-          <div className="flex items-center gap-2">
-            {!user && <div className="text-xs text-red-400 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded bg-red-500/10"><WifiOff size={12}/> Desconectado</div>}
-            {user && <div className="text-xs text-emerald-400 flex items-center gap-1 border border-emerald-500/30 px-2 py-1 rounded bg-emerald-500/10"><div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div> Online</div>}
-            
-            <Button variant="ghost" onClick={handleLogoutList} className="!px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300" title="Salir de la lista">
-              <LogOut size={18} />
+          {/* Acciones Derecha */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={handleLogoutList} className="!px-3 !py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300" title="Salir de la lista">
+              <LogOut size={20} />
             </Button>
-            <Button onClick={openAddModal} className="hidden sm:flex" disabled={!!authError}>
-              <Plus size={18} /> Agregar
+            
+            {/* Botón Agregar Grande en Desktop */}
+            <Button onClick={openAddModal} className="hidden sm:flex !px-6 !py-2.5 shadow-violet-900/40" disabled={!!authError}>
+              <Plus size={20} /> Agregar
             </Button>
           </div>
-          <button onClick={openAddModal} disabled={!!authError} className="sm:hidden bg-violet-600 p-2 rounded-full text-white ml-2 disabled:opacity-50"><Plus size={20} /></button>
+          
+          {/* Botón Agregar Flotante/Móvil Grande */}
+          <button 
+            onClick={openAddModal} 
+            disabled={!!authError} 
+            className="sm:hidden bg-violet-600 p-3 rounded-full text-white shadow-lg shadow-violet-900/40 active:scale-95 transition-transform"
+          >
+            <Plus size={24} />
+          </button>
         </div>
       </header>
 
@@ -517,7 +541,12 @@ export default function App() {
               <div className="text-center py-20 bg-gray-900/30 rounded-2xl border-2 border-dashed border-gray-800">
                 <Film size={48} className="mx-auto text-gray-700 mb-4" />
                 <h3 className="text-xl font-medium text-gray-400">{searchQuery ? 'No se encontraron resultados' : 'Lista vacía'}</h3>
-                <p className="text-gray-600 mt-2 mb-6">{searchQuery ? 'Intenta con otro término' : 'Lo que agregues aquí aparecerá también en el dispositivo de tu pareja.'}</p>
+                {/* MENSAJE NUEVO SOLICITADO */}
+                <p className="text-gray-500 mt-2 mb-6 max-w-sm mx-auto">
+                  {searchQuery 
+                    ? 'Intenta con otro término' 
+                    : 'Esta lista se podra compartir en varios dispositivos si tienen el mismo codigo.'}
+                </p>
                 {!searchQuery && <Button variant="outline" onClick={openAddModal}>Agregar Título</Button>}
               </div>
             ) : (
@@ -628,7 +657,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Calificar */}
       {isRateModalOpen && itemToRate && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
