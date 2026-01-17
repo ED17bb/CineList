@@ -454,8 +454,8 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3">
             <nav className="flex flex-1 items-center gap-1 bg-gray-950/50 p-1.5 rounded-2xl border border-gray-800">
-              <button onClick={() => setActiveTab('watchlist')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'watchlist' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>Por Ver</button>
-              <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'history' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>Historial</button>
+              <button onClick={() => setActiveTab('watchlist')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'watchlist' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>POR VER</button>
+              <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-2 rounded-xl text-base sm:text-lg font-bold transition-all text-center ${activeTab === 'history' ? 'bg-gray-800 text-white shadow-lg ring-1 ring-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}>HISTORIAL</button>
             </nav>
             <Button onClick={() => { setIsEditing(false); setEditingId(null); setNewItem({ title: '', type: 'series', platform: platforms[0] }); setIsModalOpen(true); }} className="!py-4 !px-6 !text-lg !rounded-xl shadow-violet-900/40" disabled={!!authError}><Plus size={24} /> <span className="hidden sm:inline">Agregar</span></Button>
           </div>
