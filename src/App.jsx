@@ -14,11 +14,10 @@ import {
 import { 
   Plus, Film, Tv, Trash2, CheckCircle, Star, Calendar, 
   Search, Filter, MonitorPlay, X, Edit2, LogOut, 
-  Users, Cloud, Loader2, Settings, WifiOff
+  Users, Cloud, Loader2, Settings, WifiOff, AlertTriangle
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
-// Ernesto: Asegúrate de que tus claves estén aquí correctamente
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -124,12 +123,12 @@ export default function App() {
 
   // Estados
   const [user, setUser] = useState(null);
-  const [authError, setAuthError] = useState(null); // Nuevo: Para diagnosticar errores de auth
+  const [authError, setAuthError] = useState(null);
   const [listCode, setListCode] = useState(() => localStorage.getItem('cinelist_code') || '');
   const [items, setItems] = useState([]);
   const [platforms, setPlatforms] = useState(['Netflix', 'Amazon Prime', 'Apple TV', 'Disney+', 'Crunchyroll', 'Paramount+']);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false); // Nuevo: Estado de guardado
+  const [saving, setSaving] = useState(false);
 
   // UI
   const [activeTab, setActiveTab] = useState('watchlist'); 
@@ -140,7 +139,7 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [itemToRate, setItemToRate] = useState(null);
   
-  // Filtros y Buscador
+  // Filtros
   const [filterType, setFilterType] = useState('all');
   const [filterPlatform, setFilterPlatform] = useState('all');
   const [sortHistoryBy, setSortHistoryBy] = useState('date');
@@ -164,11 +163,14 @@ export default function App() {
         }
       } catch (error) {
         console.error("Auth error:", error);
-        setAuthError(error.message); // Guardamos el error para mostrarlo
+        setAuthError("No se pudo iniciar sesión. Verifica que 'Authentication > Sign-in method > Anónimo' esté habilitado en Firebase.");
       }
     };
     initAuth();
-    return onAuthStateChanged(auth, setUser);
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) setAuthError(null);
+    });
   }, []);
 
   // Carga de datos
@@ -192,7 +194,6 @@ export default function App() {
 
       setItems(myItems);
       
-      // Actualizar plataformas dinámicamente
       const usedPlatforms = new Set(['Netflix', 'Amazon Prime', 'Apple TV', 'Disney+', 'Crunchyroll', 'Paramount+']);
       myItems.forEach(i => { if(i.platform) usedPlatforms.add(i.platform); });
       setPlatforms(Array.from(usedPlatforms));
@@ -200,24 +201,28 @@ export default function App() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching data:", error);
-      alert(`Error de conexión: ${error.message}`); // Alerta visible
+      // Si falla por permisos, es probable que no esté autenticado o Auth Anónimo esté off
+      if(error.code === 'permission-denied') {
+         setAuthError("Permiso denegado. Activa 'Authentication Anónimo' en Firebase Console.");
+      }
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // --- ACCIONES CON DIAGNÓSTICO ---
+  // --- ACCIONES ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault();
     if (!newItem.title.trim()) return;
     
-    // Diagnósticos previos
-    if (!user) return alert("Error: No estás autenticado. Recarga la página.");
-    if (!db) return alert("Error: Base de datos no inicializada.");
+    if (!user) {
+      alert("Error: No estás conectado a Firebase. Revisa el mensaje de error arriba.");
+      return;
+    }
 
-    setSaving(true); // Mostrar spinner
+    setSaving(true);
 
     try {
       const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items');
@@ -250,8 +255,7 @@ export default function App() {
       setEditingId(null);
     } catch (error) {
       console.error("Error completo:", error);
-      // Alerta detallada para saber qué pasa
-      alert(`No se pudo guardar: ${error.message}\n\nRevisa los permisos de Firebase.`);
+      alert(`No se pudo guardar: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -306,7 +310,7 @@ export default function App() {
     }
   };
 
-  // --- HELPERS Y RENDER ---
+  // --- HELPERS ---
 
   const openAddModal = () => {
     setIsEditing(false);
@@ -385,10 +389,9 @@ export default function App() {
             </Button>
           </form>
           {authError && (
-            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-              <p className="font-bold">Error de Autenticación:</p>
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm animate-pulse">
+              <p className="font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> Error de Autenticación:</p>
               <p>{authError}</p>
-              <p className="text-xs mt-1 opacity-70">Verifica que "Anonymous Auth" esté activado en Firebase Console.</p>
             </div>
           )}
         </div>
@@ -399,6 +402,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-violet-500/30">
       
+      {/* BANNER DE ERROR SI NO HAY AUTH */}
+      {authError && (
+        <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
+          <AlertTriangle size={18} />
+          {authError}
+        </div>
+      )}
+
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -417,15 +428,17 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-2">
-            {!user && <WifiOff size={18} className="text-red-500 animate-pulse" title="Sin conexión" />}
+            {!user && <div className="text-xs text-red-400 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded bg-red-500/10"><WifiOff size={12}/> Desconectado</div>}
+            {user && <div className="text-xs text-emerald-400 flex items-center gap-1 border border-emerald-500/30 px-2 py-1 rounded bg-emerald-500/10"><div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div> Online</div>}
+            
             <Button variant="ghost" onClick={handleLogoutList} className="!px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300" title="Salir de la lista">
               <LogOut size={18} />
             </Button>
-            <Button onClick={openAddModal} className="hidden sm:flex">
+            <Button onClick={openAddModal} className="hidden sm:flex" disabled={!!authError}>
               <Plus size={18} /> Agregar
             </Button>
           </div>
-          <button onClick={openAddModal} className="sm:hidden bg-violet-600 p-2 rounded-full text-white ml-2"><Plus size={20} /></button>
+          <button onClick={openAddModal} disabled={!!authError} className="sm:hidden bg-violet-600 p-2 rounded-full text-white ml-2 disabled:opacity-50"><Plus size={20} /></button>
         </div>
       </header>
 
@@ -500,7 +513,7 @@ export default function App() {
                 <Film size={48} className="mx-auto text-gray-700 mb-4" />
                 <h3 className="text-xl font-medium text-gray-400">{searchQuery ? 'No se encontraron resultados' : 'Lista vacía'}</h3>
                 <p className="text-gray-600 mt-2 mb-6">{searchQuery ? 'Intenta con otro término' : 'Lo que agregues aquí aparecerá también en el dispositivo de tu pareja.'}</p>
-                {!searchQuery && <Button variant="outline" onClick={openAddModal}>Agregar Título</Button>}
+                {!searchQuery && <Button variant="outline" onClick={openAddModal} disabled={!!authError}>Agregar Título</Button>}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -601,13 +614,7 @@ export default function App() {
               </div>
               <div className="pt-4 flex gap-3">
                 <Button variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1">Cancelar</Button>
-                
-                {/* Botón HTML estándar para asegurar el submit */}
-                <button 
-                  type="submit" 
-                  disabled={saving}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
+                <button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2">
                   {saving ? <Loader2 className="animate-spin" size={18} /> : (isEditing ? 'Actualizar' : 'Guardar')}
                 </button>
               </div>
@@ -616,10 +623,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Otros modales (Calificar y Plataforma) se mantienen similar, pero simplificados para brevedad del ejemplo, 
-          asegúrate de que en tu código final estén incluidos si los usas a menudo. 
-          Aquí dejo el de Calificar como ejemplo crítico. */}
-      
       {isRateModalOpen && itemToRate && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
