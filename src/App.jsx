@@ -21,12 +21,12 @@ import {
 // Ernesto: Pega aquí los valores que copiaste de tu consola de Firebase.
 // Asegúrate de mantener las comillas "" alrededor de cada código.
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_PEGA_AQUI",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO_ID",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TUS_NUMEROS",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
+  authDomain: "que-ver-4f4b6.firebaseapp.com",
+  projectId: "que-ver-4f4b6",
+  storageBucket: "que-ver-4f4b6.firebasestorage.app",
+  messagingSenderId: "70647074088",
+  appId: "1:70647074088:web:77fbdeecae7ddc557a141d"
 };
 
 // Detectamos si la configuración sigue siendo la de ejemplo
@@ -113,8 +113,8 @@ export default function App() {
           <div className="bg-gray-950 rounded-xl p-4 text-left text-sm space-y-3 border border-gray-800 mb-6">
             <p className="font-bold text-gray-300">Instrucciones:</p>
             <ol className="list-decimal list-inside space-y-2 text-gray-400">
-              <li>Abre el archivo <code>App.jsx</code>.</li>
-              <li>Busca <code>const firebaseConfig</code> (línea 21 aprox).</li>
+              <li>Abre el archivo <code>App.jsx</code> (este archivo).</li>
+              <li>Busca <code>const firebaseConfig</code> (al inicio).</li>
               <li>Reemplaza los valores con los de tu consola de Firebase.</li>
             </ol>
           </div>
