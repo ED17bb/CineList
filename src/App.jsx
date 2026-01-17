@@ -18,14 +18,17 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
-// Ernesto: Pega aquí los valores que copiaste de tu consola de Firebase.
-// Asegúrate de mantener las comillas "" alrededor de cada código.
+const firebaseConfig = {
+  apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
+  authDomain: "que-ver-4f4b6.firebaseapp.com",
+  projectId: "que-ver-4f4b6",
+  storageBucket: "que-ver-4f4b6.firebasestorage.app",
+  messagingSenderId: "70647074088",
+  appId: "1:70647074088:web:77fbdeecae7ddc557a141d"
+};
 
-
-// Detectamos si la configuración sigue siendo la de ejemplo
 const isConfigured = firebaseConfig.apiKey !== "TU_API_KEY_PEGA_AQUI";
 
-// Inicialización condicional para evitar errores si no hay config
 let app, auth, db;
 if (isConfigured) {
   try {
@@ -36,7 +39,6 @@ if (isConfigured) {
     console.error("Error inicializando Firebase:", e);
   }
 }
-// Definimos un ID fijo para tu app personal
 const appId = 'cine-list-pro-movil'; 
 
 // --- COMPONENTES UI ---
@@ -82,7 +84,7 @@ const Badge = ({ children, color = 'gray' }) => {
 
 export default function App() {
   
-  // Inyección automática de Tailwind CSS (Estilos)
+  // Inyección automática de Tailwind CSS
   useEffect(() => {
     const scriptId = 'tailwindcss-cdn';
     if (!document.getElementById(scriptId)) {
@@ -93,7 +95,6 @@ export default function App() {
     }
   }, []);
 
-  // Si no está configurado, mostramos pantalla de ayuda
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-center text-gray-100 font-sans">
