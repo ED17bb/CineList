@@ -17,8 +17,8 @@ import {
   Users, Cloud, Loader2, Settings
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
-// Ernesto: Pega aquí los valores que copiaste de tu consola de Firebase.
+// --- CONFIGURACIÓN DE FIREBASE ---
+// Ernesto: Asegúrate de que tus claves estén aquí
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -85,7 +85,37 @@ const Badge = ({ children, color = 'gray' }) => {
 
 export default function App() {
   
-  // (El useEffect de inyección de estilos fue eliminado porque ahora usamos la configuración nativa)
+  // --- INYECCIÓN ROBUSTA DE ESTILOS (CDN) ---
+  // Esto arregla el problema visual y evita la necesidad de instalar npm packages
+  useEffect(() => {
+    // 1. Inyectar Tailwind Script
+    if (!document.getElementById('tailwind-script')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = "https://cdn.tailwindcss.com";
+      // Configuración básica para asegurar colores oscuros correctos
+      script.onload = () => {
+        window.tailwind.config = {
+          theme: { extend: { colors: { gray: { 950: '#030712' } } } }
+        }
+      };
+      document.head.appendChild(script);
+    }
+
+    // 2. Inyectar Fuente Inter (para que no se vea la letra común)
+    if (!document.getElementById('google-fonts')) {
+      const link = document.createElement('link');
+      link.id = 'google-fonts';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap';
+      document.head.appendChild(link);
+      
+      // Aplicar fuente al body
+      const style = document.createElement('style');
+      style.innerHTML = `body { font-family: 'Inter', sans-serif; background-color: #030712; color: white; }`;
+      document.head.appendChild(style);
+    }
+  }, []);
 
   // Si no está configurado, mostramos pantalla de ayuda
   if (!isConfigured) {
@@ -98,10 +128,11 @@ export default function App() {
           <h1 className="text-2xl font-bold mb-4">Casi listo, Ernesto</h1>
           <p className="text-gray-400 mb-6">Solo falta conectar tus claves de Firebase.</p>
           <div className="bg-gray-950 rounded-xl p-4 text-left text-sm space-y-3 border border-gray-800 mb-6">
-            <p className="font-bold text-gray-300">Instrucciones:</p>
+            <p className="font-bold text-gray-300">IMPORTANTE:</p>
+            <p className="text-gray-400 mb-2">Para arreglar el error de compilación, borra <code>postcss.config.js</code> y <code>tailwind.config.js</code> de la lista de archivos a la izquierda.</p>
+            <p className="font-bold text-gray-300 mt-4">Luego:</p>
             <ol className="list-decimal list-inside space-y-2 text-gray-400">
-              <li>Abre el archivo <code>src/App.jsx</code>.</li>
-              <li>Busca <code>const firebaseConfig</code> (al principio).</li>
+              <li>Busca <code>const firebaseConfig</code> en este archivo.</li>
               <li>Reemplaza los valores con los de tu consola de Firebase.</li>
             </ol>
           </div>
