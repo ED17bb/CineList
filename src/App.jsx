@@ -39,7 +39,6 @@ if (isConfigured) {
     console.error("Error inicializando Firebase:", e);
   }
 }
-const appId = 'cine-list-pro-movil'; 
 
 // --- COMPONENTES UI ---
 
@@ -52,9 +51,7 @@ const Button = ({ children, onClick, variant = 'primary', className = '', ...pro
     ghost: "text-gray-400 hover:text-white hover:bg-white/5",
     outline: "border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white"
   };
-  
   const variantClass = variants[variant] || variants.primary;
-
   return (
     <button onClick={onClick} className={`${baseStyle} ${variantClass} ${className}`} {...props}>
       {children}
@@ -72,7 +69,6 @@ const Badge = ({ children, color = 'gray' }) => {
     yellow: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
   };
   const selectedColor = colors[color] || colors.gray;
-
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${selectedColor} uppercase tracking-wider`}>
       {children}
@@ -84,7 +80,7 @@ const Badge = ({ children, color = 'gray' }) => {
 
 export default function App() {
   
-  // Inyección automática de Tailwind CSS
+  // Estilos
   useEffect(() => {
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
@@ -151,19 +147,15 @@ export default function App() {
   const [newPlatformName, setNewPlatformName] = useState('');
   const [inputCode, setInputCode] = useState('');
 
-  // Autenticación Robusta
+  // Autenticación
   useEffect(() => {
     if (!isConfigured) return;
     const initAuth = async () => {
       try {
-        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-           await signInWithCustomToken(auth, window.__initial_auth_token);
-        } else {
-           await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
         console.error("Auth error:", error);
-        setAuthError("No se pudo iniciar sesión. Verifica que 'Authentication > Sign-in method > Anónimo' esté habilitado en Firebase.");
+        setAuthError("Error de autenticación. Verifica la consola de Firebase.");
       }
     };
     initAuth();
@@ -173,7 +165,7 @@ export default function App() {
     });
   }, []);
 
-  // Carga de datos
+  // Carga de datos (Ruta simplificada)
   useEffect(() => {
     if (!isConfigured || !user || !listCode) {
       setLoading(false);
@@ -181,7 +173,8 @@ export default function App() {
     }
 
     setLoading(true);
-    const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items');
+    // CAMBIO IMPORTANTE: Ruta simple 'cinelist'
+    const collectionRef = collection(db, 'cinelist');
 
     const unsubscribe = onSnapshot(collectionRef, (snapshot) => {
       const fetchedItems = snapshot.docs.map(doc => ({
@@ -200,10 +193,11 @@ export default function App() {
       
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching data:", error);
-      // Si falla por permisos, es probable que no esté autenticado o Auth Anónimo esté off
+      console.error("Error fetching:", error);
       if(error.code === 'permission-denied') {
-         setAuthError("Permiso denegado. Activa 'Authentication Anónimo' en Firebase Console.");
+         setAuthError("Faltan permisos. ¿Creaste la base de datos en modo prueba?");
+      } else if (error.code === 'unavailable') {
+         setAuthError("No se puede conectar a Firebase. Revisa tu internet o configuración.");
       }
       setLoading(false);
     });
@@ -211,51 +205,67 @@ export default function App() {
     return () => unsubscribe();
   }, [user, listCode]);
 
+  // Helper para timeout
+  const timeoutPromise = (ms, promise) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("La conexión es muy lenta o la base de datos no responde."));
+      }, ms);
+      promise.then(value => {
+        clearTimeout(timer);
+        resolve(value);
+      }).catch(reason => {
+        clearTimeout(timer);
+        reject(reason);
+      });
+    });
+  };
+
   // --- ACCIONES ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault();
     if (!newItem.title.trim()) return;
-    
-    if (!user) {
-      alert("Error: No estás conectado a Firebase. Revisa el mensaje de error arriba.");
-      return;
-    }
+    if (!user) return alert("No estás conectado.");
 
     setSaving(true);
 
     try {
-      const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items');
+      // CAMBIO IMPORTANTE: Ruta simple 'cinelist'
+      const collectionRef = collection(db, 'cinelist');
       
-      if (isEditing && editingId) {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items', editingId);
-        await updateDoc(docRef, {
-          title: newItem.title,
-          type: newItem.type,
-          platform: newItem.platform
-        });
-      } else {
-        await addDoc(collectionRef, {
-          listId: listCode,
-          title: newItem.title,
-          type: newItem.type,
-          platform: newItem.platform,
-          status: 'pending',
-          addedAt: new Date().toISOString(),
-          createdAt: serverTimestamp(),
-          watchedAt: null,
-          rating: null,
-          review: null
-        });
-      }
+      // Promesa con timeout de 5 segundos para que no gire eternamente
+      await timeoutPromise(5000, (async () => {
+        if (isEditing && editingId) {
+          const docRef = doc(db, 'cinelist', editingId);
+          await updateDoc(docRef, {
+            title: newItem.title,
+            type: newItem.type,
+            platform: newItem.platform
+          });
+        } else {
+          await addDoc(collectionRef, {
+            listId: listCode,
+            title: newItem.title,
+            type: newItem.type,
+            platform: newItem.platform,
+            status: 'pending',
+            addedAt: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+            watchedAt: null,
+            rating: null,
+            review: null
+          });
+        }
+      })());
 
       setIsModalOpen(false);
       setNewItem({ title: '', type: 'series', platform: platforms[0] });
       setIsEditing(false);
       setEditingId(null);
     } catch (error) {
-      console.error("Error completo:", error);
-      alert(`No se pudo guardar: ${error.message}`);
+      console.error("Error:", error);
+      alert(`Error al guardar: ${error.message}\n\nAsegúrate de haber creado la 'Firestore Database' en la consola.`);
     } finally {
       setSaving(false);
     }
@@ -267,7 +277,7 @@ export default function App() {
     setSaving(true);
 
     try {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items', itemToRate.id);
+      const docRef = doc(db, 'cinelist', itemToRate.id);
       await updateDoc(docRef, {
         status: 'watched',
         rating: Number(ratingData.rating),
@@ -277,7 +287,7 @@ export default function App() {
       setIsRateModalOpen(false);
       setItemToRate(null);
     } catch (error) {
-      alert(`Error al calificar: ${error.message}`);
+      alert(`Error: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -286,10 +296,10 @@ export default function App() {
   const deleteItemCloud = async (id) => {
     if (window.confirm('¿Eliminar para ambos usuarios?')) {
       try {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items', id);
+        const docRef = doc(db, 'cinelist', id);
         await deleteDoc(docRef);
       } catch (error) {
-        alert(`Error al borrar: ${error.message}`);
+        alert(`Error: ${error.message}`);
       }
     }
   };
@@ -309,8 +319,6 @@ export default function App() {
       setItems([]);
     }
   };
-
-  // --- HELPERS ---
 
   const openAddModal = () => {
     setIsEditing(false);
@@ -361,8 +369,6 @@ export default function App() {
 
   const filteredItems = getFilteredItems();
 
-  // --- VISTAS ---
-
   if (!listCode) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
@@ -402,7 +408,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-violet-500/30">
       
-      {/* BANNER DE ERROR SI NO HAY AUTH */}
       {authError && (
         <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
           <AlertTriangle size={18} />
@@ -513,7 +518,7 @@ export default function App() {
                 <Film size={48} className="mx-auto text-gray-700 mb-4" />
                 <h3 className="text-xl font-medium text-gray-400">{searchQuery ? 'No se encontraron resultados' : 'Lista vacía'}</h3>
                 <p className="text-gray-600 mt-2 mb-6">{searchQuery ? 'Intenta con otro término' : 'Lo que agregues aquí aparecerá también en el dispositivo de tu pareja.'}</p>
-                {!searchQuery && <Button variant="outline" onClick={openAddModal} disabled={!!authError}>Agregar Título</Button>}
+                {!searchQuery && <Button variant="outline" onClick={openAddModal}>Agregar Título</Button>}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -623,6 +628,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal Calificar */}
       {isRateModalOpen && itemToRate && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
