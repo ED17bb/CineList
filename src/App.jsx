@@ -14,11 +14,11 @@ import {
 import { 
   Plus, Film, Tv, Trash2, CheckCircle, Star, Calendar, 
   Search, Filter, MonitorPlay, X, Edit2, LogOut, 
-  Users, Cloud, Loader2, Settings
+  Users, Cloud, Loader2, Settings, WifiOff
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN DE FIREBASE ---
-// Ernesto: Asegúrate de que tus claves estén aquí
+// --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
+// Ernesto: Asegúrate de que tus claves estén aquí correctamente
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -85,39 +85,29 @@ const Badge = ({ children, color = 'gray' }) => {
 
 export default function App() {
   
-  // --- INYECCIÓN ROBUSTA DE ESTILOS (CDN) ---
-  // Esto arregla el problema visual y evita la necesidad de instalar npm packages
+  // Inyección automática de Tailwind CSS
   useEffect(() => {
-    // 1. Inyectar Tailwind Script
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
       script.id = 'tailwind-script';
       script.src = "https://cdn.tailwindcss.com";
-      // Configuración básica para asegurar colores oscuros correctos
       script.onload = () => {
-        window.tailwind.config = {
-          theme: { extend: { colors: { gray: { 950: '#030712' } } } }
-        }
+        window.tailwind.config = { theme: { extend: { colors: { gray: { 950: '#030712' } } } } };
       };
       document.head.appendChild(script);
     }
-
-    // 2. Inyectar Fuente Inter (para que no se vea la letra común)
     if (!document.getElementById('google-fonts')) {
       const link = document.createElement('link');
       link.id = 'google-fonts';
       link.rel = 'stylesheet';
       link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap';
       document.head.appendChild(link);
-      
-      // Aplicar fuente al body
       const style = document.createElement('style');
       style.innerHTML = `body { font-family: 'Inter', sans-serif; background-color: #030712; color: white; }`;
       document.head.appendChild(style);
     }
   }, []);
 
-  // Si no está configurado, mostramos pantalla de ayuda
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-center text-gray-100 font-sans">
@@ -125,17 +115,8 @@ export default function App() {
           <div className="bg-yellow-500/20 p-4 rounded-full w-fit mx-auto mb-6">
             <Settings size={40} className="text-yellow-400" />
           </div>
-          <h1 className="text-2xl font-bold mb-4">Casi listo, Ernesto</h1>
-          <p className="text-gray-400 mb-6">Solo falta conectar tus claves de Firebase.</p>
-          <div className="bg-gray-950 rounded-xl p-4 text-left text-sm space-y-3 border border-gray-800 mb-6">
-            <p className="font-bold text-gray-300">IMPORTANTE:</p>
-            <p className="text-gray-400 mb-2">Para arreglar el error de compilación, borra <code>postcss.config.js</code> y <code>tailwind.config.js</code> de la lista de archivos a la izquierda.</p>
-            <p className="font-bold text-gray-300 mt-4">Luego:</p>
-            <ol className="list-decimal list-inside space-y-2 text-gray-400">
-              <li>Busca <code>const firebaseConfig</code> en este archivo.</li>
-              <li>Reemplaza los valores con los de tu consola de Firebase.</li>
-            </ol>
-          </div>
+          <h1 className="text-2xl font-bold mb-4">Configuración Pendiente</h1>
+          <p className="text-gray-400 mb-6">Recuerda pegar tus claves de Firebase en el archivo <code>App.jsx</code>.</p>
         </div>
       </div>
     );
@@ -143,10 +124,12 @@ export default function App() {
 
   // Estados
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState(null); // Nuevo: Para diagnosticar errores de auth
   const [listCode, setListCode] = useState(() => localStorage.getItem('cinelist_code') || '');
   const [items, setItems] = useState([]);
   const [platforms, setPlatforms] = useState(['Netflix', 'Amazon Prime', 'Apple TV', 'Disney+', 'Crunchyroll', 'Paramount+']);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false); // Nuevo: Estado de guardado
 
   // UI
   const [activeTab, setActiveTab] = useState('watchlist'); 
@@ -157,7 +140,7 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [itemToRate, setItemToRate] = useState(null);
   
-  // Filtros
+  // Filtros y Buscador
   const [filterType, setFilterType] = useState('all');
   const [filterPlatform, setFilterPlatform] = useState('all');
   const [sortHistoryBy, setSortHistoryBy] = useState('date');
@@ -169,7 +152,7 @@ export default function App() {
   const [newPlatformName, setNewPlatformName] = useState('');
   const [inputCode, setInputCode] = useState('');
 
-  // Autenticación
+  // Autenticación Robusta
   useEffect(() => {
     if (!isConfigured) return;
     const initAuth = async () => {
@@ -181,6 +164,7 @@ export default function App() {
         }
       } catch (error) {
         console.error("Auth error:", error);
+        setAuthError(error.message); // Guardamos el error para mostrarlo
       }
     };
     initAuth();
@@ -208,26 +192,32 @@ export default function App() {
 
       setItems(myItems);
       
+      // Actualizar plataformas dinámicamente
       const usedPlatforms = new Set(['Netflix', 'Amazon Prime', 'Apple TV', 'Disney+', 'Crunchyroll', 'Paramount+']);
-      myItems.forEach(i => {
-        if(i.platform) usedPlatforms.add(i.platform);
-      });
+      myItems.forEach(i => { if(i.platform) usedPlatforms.add(i.platform); });
       setPlatforms(Array.from(usedPlatforms));
       
       setLoading(false);
     }, (error) => {
       console.error("Error fetching data:", error);
+      alert(`Error de conexión: ${error.message}`); // Alerta visible
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // --- ACCIONES ---
+  // --- ACCIONES CON DIAGNÓSTICO ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault();
     if (!newItem.title.trim()) return;
+    
+    // Diagnósticos previos
+    if (!user) return alert("Error: No estás autenticado. Recarga la página.");
+    if (!db) return alert("Error: Base de datos no inicializada.");
+
+    setSaving(true); // Mostrar spinner
 
     try {
       const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items');
@@ -259,14 +249,18 @@ export default function App() {
       setIsEditing(false);
       setEditingId(null);
     } catch (error) {
-      console.error("Error adding/updating:", error);
-      alert("Error al guardar. Verifica tu conexión.");
+      console.error("Error completo:", error);
+      // Alerta detallada para saber qué pasa
+      alert(`No se pudo guardar: ${error.message}\n\nRevisa los permisos de Firebase.`);
+    } finally {
+      setSaving(false);
     }
   };
 
   const confirmRatingCloud = async (e) => {
     e.preventDefault();
     if (!itemToRate) return;
+    setSaving(true);
 
     try {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items', itemToRate.id);
@@ -279,7 +273,9 @@ export default function App() {
       setIsRateModalOpen(false);
       setItemToRate(null);
     } catch (error) {
-      console.error("Error rating:", error);
+      alert(`Error al calificar: ${error.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -289,7 +285,7 @@ export default function App() {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'cinelist_cloud_items', id);
         await deleteDoc(docRef);
       } catch (error) {
-        console.error("Error deleting:", error);
+        alert(`Error al borrar: ${error.message}`);
       }
     }
   };
@@ -361,6 +357,8 @@ export default function App() {
 
   const filteredItems = getFilteredItems();
 
+  // --- VISTAS ---
+
   if (!listCode) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
@@ -386,6 +384,13 @@ export default function App() {
                Entrar a la Lista
             </Button>
           </form>
+          {authError && (
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              <p className="font-bold">Error de Autenticación:</p>
+              <p>{authError}</p>
+              <p className="text-xs mt-1 opacity-70">Verifica que "Anonymous Auth" esté activado en Firebase Console.</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -412,6 +417,7 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {!user && <WifiOff size={18} className="text-red-500 animate-pulse" title="Sin conexión" />}
             <Button variant="ghost" onClick={handleLogoutList} className="!px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300" title="Salir de la lista">
               <LogOut size={18} />
             </Button>
@@ -425,6 +431,7 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
+        {/* Filtros */}
         <div className="mb-8 space-y-4">
           <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
             <div className="flex flex-wrap gap-2">
@@ -471,6 +478,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* CONTENIDO PRINCIPAL */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <Loader2 size={32} className="animate-spin mb-4 text-violet-500" />
@@ -593,13 +601,25 @@ export default function App() {
               </div>
               <div className="pt-4 flex gap-3">
                 <Button variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1">Cancelar</Button>
-                <Button type="submit" variant="primary" className="flex-1">{isEditing ? 'Actualizar' : 'Guardar'}</Button>
+                
+                {/* Botón HTML estándar para asegurar el submit */}
+                <button 
+                  type="submit" 
+                  disabled={saving}
+                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : (isEditing ? 'Actualizar' : 'Guardar')}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Otros modales (Calificar y Plataforma) se mantienen similar, pero simplificados para brevedad del ejemplo, 
+          asegúrate de que en tu código final estén incluidos si los usas a menudo. 
+          Aquí dejo el de Calificar como ejemplo crítico. */}
+      
       {isRateModalOpen && itemToRate && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
@@ -623,7 +643,9 @@ export default function App() {
               </div>
               <div className="flex gap-3">
                 <Button variant="ghost" onClick={() => setIsRateModalOpen(false)} className="flex-1">Cancelar</Button>
-                <Button type="submit" variant="primary" className="flex-1">Confirmar</Button>
+                <button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium">
+                  {saving ? 'Guardando...' : 'Confirmar'}
+                </button>
               </div>
             </form>
           </div>
