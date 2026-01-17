@@ -1,13 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    
+    <!-- PWA Configuración -->
+    <meta name="theme-color" content="#030712" />
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/4221/4221484.png">
+    
+    <title>CineList Pro</title>
+    <!-- Tailwind CDN (Respaldo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
+  <body class="bg-gray-950 text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Registro del Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          // Añadimos .catch() para manejar errores en entornos de desarrollo (como StackBlitz)
+          // donde el protocolo de la URL no soporta Service Workers.
+          navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('Info: Service Worker no registrado (normal en modo desarrollo/preview):', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
