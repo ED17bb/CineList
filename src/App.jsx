@@ -46,7 +46,7 @@ if (isConfigured) {
 
 // --- HOOKS Y HELPERS ---
 
-function useLongPress(callback = () => {}, ms = 600) {
+function useLongPress(callback = () => {}, ms = 3000) { // Default cambiado a 3000ms por seguridad
   const [startLongPress, setStartLongPress] = useState(false);
   const timerId = useRef();
 
@@ -116,12 +116,11 @@ const Badge = ({ children, color = 'gray' }) => {
   );
 };
 
-// --- SUB-COMPONENTE TARJETA (CRÍTICO PARA ARREGLAR EL ERROR DE PANTALLA NEGRA) ---
+// --- SUB-COMPONENTE TARJETA ---
 const MediaCard = ({ item, activeTab, reorderModeId, handlers, searchQuery }) => {
-  // El hook useLongPress AHORA SÍ es válido aquí porque esto es un componente real
-  const longPressProps = useLongPress(() => handlers.onLongPress(item.id), 600);
+  // AUMENTADO A 3000ms (3 segundos) para evitar toques accidentales
+  const longPressProps = useLongPress(() => handlers.onLongPress(item.id), 3000);
 
-  // Desactivar long press si hay búsqueda o filtros activos para evitar conflictos
   const isInteractable = !reorderModeId && !searchQuery;
   const interactionProps = isInteractable ? longPressProps : {};
 
@@ -425,7 +424,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
         <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl max-w-md w-full shadow-2xl">
           <div className="bg-gradient-to-tr from-violet-600 to-indigo-600 p-3 rounded-xl w-fit mx-auto mb-6"><Users size={32} className="text-white" /></div>
-          <h1 className="text-2xl font-bold text-white mb-2">Bienvenido a CineList Pro</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">Bienvenido a CineList by ED</h1>
           <p className="text-gray-400 mb-8">Para empezar, crea un código único o ingresa el código de tu pareja.</p>
           <form onSubmit={handleJoinList} className="space-y-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Nombre de tu lista (Código)</label><input type="text" placeholder="Ej: ERNESTO-CASA" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg tracking-widest uppercase focus:ring-2 focus:ring-violet-500 outline-none placeholder-gray-700" value={inputCode} onChange={e => setInputCode(e.target.value)} /></div>
@@ -446,7 +445,7 @@ export default function App() {
           <div className="flex items-center justify-between">
              <div className="flex items-center gap-3">
                <div className="bg-violet-600/20 p-2 rounded-xl"><Cloud size={24} className="text-violet-400" /></div>
-               <div className="flex flex-col"><h1 className="text-xl font-bold text-white leading-none">CineList Pro</h1><div className="flex items-center gap-1 text-violet-400 text-sm mt-1 bg-violet-900/10 px-2 py-0.5 rounded-md font-mono tracking-wider border border-violet-500/20"><Hash size={12} />{listCode}</div></div>
+               <div className="flex flex-col"><h1 className="text-xl font-bold text-white leading-none">CineList by ED</h1><div className="flex items-center gap-1 text-violet-400 text-sm mt-1 bg-violet-900/10 px-2 py-0.5 rounded-md font-mono tracking-wider border border-violet-500/20"><Hash size={12} />{listCode}</div></div>
              </div>
              <div className="flex items-center gap-2">
                {deferredPrompt && <Button variant="install" onClick={handleInstallClick} className="!px-3 !py-2 text-xs sm:text-sm animate-pulse"><Download size={16} /> <span className="hidden sm:inline">Instalar</span></Button>}
