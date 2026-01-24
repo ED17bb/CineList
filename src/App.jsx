@@ -3,8 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   onAuthStateChanged, 
-  signInWithRedirect, 
-  getRedirectResult, 
+  signInWithPopup, // CAMBIO: Volvemos a Popup por estabilidad
   GoogleAuthProvider, 
   signOut,
   setPersistence,
@@ -31,6 +30,7 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
+// ¡¡¡ ERNESTO: ASEGÚRATE DE PEGAR TUS CLAVES AQUÍ !!!
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -40,6 +40,7 @@ const firebaseConfig = {
   appId: "1:70647074088:web:77fbdeecae7ddc557a141d"
 };
 
+// Validación de seguridad para avisarte si faltan las claves
 const isConfigured = firebaseConfig.apiKey !== "TU_API_KEY_PEGA_AQUI";
 
 let app, auth, db;
@@ -219,10 +220,7 @@ export default function App() {
 
   // Estados
   const [user, setUser] = useState(null);
-  // NUEVO: Estados de carga más robustos
-  const [isAuthLoading, setIsAuthLoading] = useState(true); 
-  const [isRedirectLoading, setIsRedirectLoading] = useState(true);
-
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [listCode, setListCode] = useState(() => localStorage.getItem('cinelist_code') || '');
   const [items, setItems] = useState([]);
@@ -256,36 +254,13 @@ export default function App() {
   const [newPlatformName, setNewPlatformName] = useState('');
   const [inputCode, setInputCode] = useState('');
 
-  // AUTH: Google (Lógica Blindada)
+  // AUTH: Google (Configuración Popup)
   useEffect(() => {
     if (!isConfigured) {
         setIsAuthLoading(false);
-        setIsRedirectLoading(false);
         return;
     }
-    
-    // 1. Verificar Redirect (Esto se ejecuta al volver de Google)
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          console.log("Login exitoso tras redirect:", result.user.email);
-          setUser(result.user);
-          setAuthError(null);
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect Error:", error);
-        if (error.code === 'auth/unauthorized-domain') {
-           setAuthError("ERROR DE DOMINIO: Debes agregar tu URL de Vercel a 'Authorized Domains' en Firebase Console.");
-        } else {
-           setAuthError(error.message);
-        }
-      })
-      .finally(() => {
-        setIsRedirectLoading(false); // Ya terminamos de chequear el redirect
-      });
 
-    // 2. Escuchar estado general (Persistencia)
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       console.log("Auth State Changed:", currentUser?.email);
       setUser(currentUser);
@@ -300,10 +275,11 @@ export default function App() {
     const provider = new GoogleAuthProvider();
     try {
       await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
+      // CAMBIO IMPORTANTE: Usamos Popup en lugar de Redirect
+      await signInWithPopup(auth, provider);
     } catch (error) {
       console.error("Error Login Init:", error);
-      setAuthError("No se pudo iniciar el proceso de login. " + error.message);
+      setAuthError("No se pudo iniciar sesión. " + error.message);
     }
   };
 
@@ -474,11 +450,11 @@ export default function App() {
   }
 
   // PANTALLA DE CARGA (ESPERA A GOOGLE)
-  if (isAuthLoading || isRedirectLoading) {
+  if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center">
         <Loader2 size={48} className="text-violet-500 animate-spin mb-4" />
-        <p className="text-gray-400 text-sm">Verificando credenciales...</p>
+        <p className="text-gray-400 text-sm">Verificando sesión...</p>
       </div>
     );
   }
