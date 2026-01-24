@@ -7,8 +7,8 @@ import {
   getRedirectResult, 
   GoogleAuthProvider, 
   signOut,
-  setPersistence, // Importante
-  browserLocalPersistence // Importante
+  setPersistence,
+  browserLocalPersistence 
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -219,7 +219,10 @@ export default function App() {
 
   // Estados
   const [user, setUser] = useState(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // ESTADO DE CARGA PARA AUTH
+  // NUEVO: Estados de carga más robustos
+  const [isAuthLoading, setIsAuthLoading] = useState(true); 
+  const [isRedirectLoading, setIsRedirectLoading] = useState(true);
+
   const [authError, setAuthError] = useState(null);
   const [listCode, setListCode] = useState(() => localStorage.getItem('cinelist_code') || '');
   const [items, setItems] = useState([]);
@@ -253,31 +256,38 @@ export default function App() {
   const [newPlatformName, setNewPlatformName] = useState('');
   const [inputCode, setInputCode] = useState('');
 
-  // AUTH: Google
+  // AUTH: Google (Lógica Blindada)
   useEffect(() => {
     if (!isConfigured) {
         setIsAuthLoading(false);
+        setIsRedirectLoading(false);
         return;
     }
     
-    // VERIFICAR REDIRECT (Para errores de autenticación)
+    // 1. Verificar Redirect (Esto se ejecuta al volver de Google)
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          console.log("Redirect success user:", result.user);
+          console.log("Login exitoso tras redirect:", result.user.email);
           setUser(result.user);
+          setAuthError(null);
         }
       })
       .catch((error) => {
         console.error("Redirect Error:", error);
         if (error.code === 'auth/unauthorized-domain') {
-           setAuthError("DOMINIO NO AUTORIZADO: Agrega tu URL de Vercel en Firebase Console > Authentication > Settings.");
+           setAuthError("ERROR DE DOMINIO: Debes agregar tu URL de Vercel a 'Authorized Domains' en Firebase Console.");
         } else {
            setAuthError(error.message);
         }
+      })
+      .finally(() => {
+        setIsRedirectLoading(false); // Ya terminamos de chequear el redirect
       });
 
+    // 2. Escuchar estado general (Persistencia)
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("Auth State Changed:", currentUser?.email);
       setUser(currentUser);
       if (currentUser) setAuthError(null);
       setIsAuthLoading(false); 
@@ -289,13 +299,11 @@ export default function App() {
     setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
-      // 1. Forzar persistencia LOCAL
       await setPersistence(auth, browserLocalPersistence);
-      // 2. Redirigir
       await signInWithRedirect(auth, provider);
     } catch (error) {
-      console.error("Error Login:", error);
-      setAuthError("No se pudo iniciar sesión. Verifica 'Dominios Autorizados' en Firebase.");
+      console.error("Error Login Init:", error);
+      setAuthError("No se pudo iniciar el proceso de login. " + error.message);
     }
   };
 
@@ -323,7 +331,6 @@ export default function App() {
         ...doc.data()
       }));
 
-      // Ordenar por campo 'order' o timestamp
       fetchedItems.sort((a, b) => {
         const orderA = a.order ?? a.createdAt?.seconds ?? 0;
         const orderB = b.order ?? b.createdAt?.seconds ?? 0;
@@ -346,7 +353,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // Funciones de manejo (Move, LongPress, Add, etc.)
+  // Funciones de manejo
   const moveItem = async (itemId, direction) => {
     const currentIndex = items.findIndex(i => i.id === itemId);
     if (currentIndex === -1) return;
@@ -389,7 +396,6 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DE EXPORTACIÓN ---
   const getAvailableMonths = () => {
     const months = new Set();
     items.forEach(item => { if (item.status === 'watched' && item.watchedAt) months.add(item.watchedAt.substring(0, 7)); });
@@ -417,8 +423,6 @@ export default function App() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     setIsExportModalOpen(false);
   };
-
-  // --- OTRAS ACCIONES ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault(); if (!newItem.title.trim()) return; setSaving(true);
@@ -469,12 +473,12 @@ export default function App() {
     );
   }
 
-  // PANTALLA DE CARGA (Para evitar el rebote del login)
-  if (isAuthLoading) {
+  // PANTALLA DE CARGA (ESPERA A GOOGLE)
+  if (isAuthLoading || isRedirectLoading) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center">
         <Loader2 size={48} className="text-violet-500 animate-spin mb-4" />
-        <p className="text-gray-400 text-sm">Verificando sesión...</p>
+        <p className="text-gray-400 text-sm">Verificando credenciales...</p>
       </div>
     );
   }
@@ -531,7 +535,7 @@ export default function App() {
     );
   }
 
-  // APP PRINCIPAL (Main)
+  // APP PRINCIPAL
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-violet-500/30 flex flex-col">
       {authError && <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2"><AlertTriangle size={18} />{authError}</div>}
