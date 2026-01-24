@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   onAuthStateChanged, 
-  signInWithPopup, 
+  signInWithRedirect, // CAMBIO: Usamos Redirect en vez de Popup para móviles
+  getRedirectResult,  // CAMBIO: Para capturar el usuario al volver de Google
   GoogleAuthProvider, 
   signOut 
 } from 'firebase/auth';
@@ -28,8 +29,6 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
-// Ernesto: Recuerda que para que el Login de Google funcione, 
-// debes haberlo activado en la consola de Firebase (Authentication > Google > Habilitar)
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -265,6 +264,20 @@ export default function App() {
   // AUTH: Google
   useEffect(() => {
     if (!isConfigured) return;
+    
+    // Escuchar el resultado del Redirect (IMPORTANTE PARA MÓVIL)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          setUser(result.user);
+          setAuthError(null);
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect Error:", error);
+        setAuthError(error.message);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) setAuthError(null);
@@ -276,10 +289,11 @@ export default function App() {
     setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      // USAMOS REDIRECT: Mejor para móviles
+      await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error("Error Login:", error);
-      setAuthError("No se pudo iniciar sesión con Google. Revisa la consola.");
+      setAuthError("No se pudo iniciar sesión. Verifica 'Dominios Autorizados' en Firebase.");
     }
   };
 
