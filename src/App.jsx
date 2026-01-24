@@ -6,7 +6,9 @@ import {
   signInWithRedirect, 
   getRedirectResult, 
   GoogleAuthProvider, 
-  signOut 
+  signOut,
+  setPersistence, // Importante
+  browserLocalPersistence // Importante
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -258,23 +260,27 @@ export default function App() {
         return;
     }
     
-    // Escuchar el resultado del Redirect (IMPORTANTE PARA MÓVIL)
+    // VERIFICAR REDIRECT (Para errores de autenticación)
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
+          console.log("Redirect success user:", result.user);
           setUser(result.user);
-          setAuthError(null);
         }
       })
       .catch((error) => {
         console.error("Redirect Error:", error);
-        setAuthError(error.message);
+        if (error.code === 'auth/unauthorized-domain') {
+           setAuthError("DOMINIO NO AUTORIZADO: Agrega tu URL de Vercel en Firebase Console > Authentication > Settings.");
+        } else {
+           setAuthError(error.message);
+        }
       });
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) setAuthError(null);
-      setIsAuthLoading(false); // YA SABEMOS SI HAY USUARIO O NO
+      setIsAuthLoading(false); 
     });
     return () => unsubscribe();
   }, []);
@@ -283,6 +289,9 @@ export default function App() {
     setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
+      // 1. Forzar persistencia LOCAL
+      await setPersistence(auth, browserLocalPersistence);
+      // 2. Redirigir
       await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error("Error Login:", error);
@@ -337,7 +346,7 @@ export default function App() {
     return () => unsubscribe();
   }, [user, listCode]);
 
-  // Funciones de manejo (Move, LongPress, Add, etc.) se mantienen igual
+  // Funciones de manejo (Move, LongPress, Add, etc.)
   const moveItem = async (itemId, direction) => {
     const currentIndex = items.findIndex(i => i.id === itemId);
     if (currentIndex === -1) return;
@@ -355,8 +364,7 @@ export default function App() {
       const batch = writeBatch(db);
       const currentRef = doc(db, 'cinelist', currentItem.id);
       const targetRef = doc(db, 'cinelist', targetItem.id);
-      
-      // Swap order values
+
       let newCurrentOrder = targetOrderVal;
       let newTargetOrder = currentOrderVal;
       
@@ -381,6 +389,7 @@ export default function App() {
     }
   };
 
+  // --- LÓGICA DE EXPORTACIÓN ---
   const getAvailableMonths = () => {
     const months = new Set();
     items.forEach(item => { if (item.status === 'watched' && item.watchedAt) months.add(item.watchedAt.substring(0, 7)); });
@@ -408,6 +417,8 @@ export default function App() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     setIsExportModalOpen(false);
   };
+
+  // --- OTRAS ACCIONES ---
 
   const addItemToCloud = async (e) => {
     e.preventDefault(); if (!newItem.title.trim()) return; setSaving(true);
@@ -554,9 +565,21 @@ export default function App() {
               <button onClick={() => setFilterType('series')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterType === 'series' ? 'bg-violet-500/10 border-violet-500 text-violet-300' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}><Tv size={16} /> Series</button>
               <button onClick={() => setFilterType('movie')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterType === 'movie' ? 'bg-violet-500/10 border-violet-500 text-violet-300' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}><Film size={16} /> Películas</button>
             </div>
+            
             <div className="flex items-center gap-3 w-full md:w-auto">
-              {activeTab === 'history' && <div className="relative group"><select value={sortHistoryBy} onChange={(e) => setSortHistoryBy(e.target.value)} className="appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none w-full md:w-auto"><option value="date">Por Fecha</option><option value="rating">Por Nota</option></select><Filter size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" /></div>}
-              {activeTab === 'history' && <Button variant="secondary" onClick={() => setIsExportModalOpen(true)} className="!px-3 !py-2 h-full text-violet-300 border-violet-500/30 hover:bg-violet-500/10"><FileText size={18} /></Button>}
+              {/* FILTROS DE HISTORIAL + BOTÓN EXPORTAR */}
+              {activeTab === 'history' && (
+                <div className="flex items-center gap-2">
+                  <div className="relative group">
+                    <select value={sortHistoryBy} onChange={(e) => setSortHistoryBy(e.target.value)} className="appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none w-full md:w-auto"><option value="date">Por Fecha</option><option value="rating">Por Nota</option></select>
+                    <Filter size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" />
+                  </div>
+                  <Button variant="secondary" onClick={() => setIsExportModalOpen(true)} className="!px-3 !py-2 h-full text-violet-300 border-violet-500/30 hover:bg-violet-500/10">
+                    <FileText size={18} />
+                  </Button>
+                </div>
+              )}
+
               <div className="relative flex-1 md:flex-none"><select value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value)} className="w-full appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none"><option value="all">Todas las plataformas</option>{platforms.map(p => <option key={p} value={p}>{p}</option>)}</select><MonitorPlay size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" /></div>
               <button onClick={() => setIsPlatformModalOpen(true)} className="text-xs text-violet-400 hover:text-violet-300 underline whitespace-nowrap">+ Plataforma</button>
             </div>
@@ -610,7 +633,6 @@ export default function App() {
       </main>
 
       {/* --- MODALES --- */}
-      {/* Se incluyen los mismos modales que antes (simplificados en este bloque para brevedad, pero presentes en el archivo completo) */}
       {isModalOpen && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white">{isEditing ? 'Editar Título' : 'Agregar a la lista compartida'}</h2><button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white"><X size={24} /></button></div><form onSubmit={addItemToCloud} className="space-y-4"><div><label className="block text-sm font-medium text-gray-400 mb-1">Título</label><input type="text" autoFocus className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none text-lg" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} required /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-400 mb-1">Tipo</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white outline-none focus:border-violet-500" value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value})}><option value="series">Serie</option><option value="movie">Película</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Plataforma</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white outline-none focus:border-violet-500" value={newItem.platform} onChange={e => setNewItem({...newItem, platform: e.target.value})}>{platforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div></div><div className="pt-4 flex gap-3"><Button variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1 !py-3">Cancelar</Button><button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 text-base">{saving ? <Loader2 className="animate-spin" size={20} /> : (isEditing ? 'Actualizar' : 'Guardar')}</button></div></form></div></div>}
       {isRateModalOpen && itemToRate && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center"><h2 className="text-2xl font-bold text-white mb-1">¿Qué tal estuvo?</h2><p className="text-gray-400 text-base mb-6">Califica <span className="text-violet-400 font-bold">{itemToRate.title}</span></p><form onSubmit={confirmRatingCloud} className="space-y-6"><div className="bg-gray-950 p-5 rounded-2xl border border-gray-800"><div className="flex justify-between items-center mb-4"><label className="text-sm font-medium text-gray-300">Puntuación</label><span className="text-4xl font-black text-yellow-400">{ratingData.rating}</span></div><input type="range" min="0" max="10" step="0.5" value={ratingData.rating} onChange={e => setRatingData({...ratingData, rating: Number(e.target.value)})} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500" /><div className="flex justify-between text-xs text-gray-500 mt-2 font-medium"><span>0 (Malísima)</span><span>10 (Obra Maestra)</span></div></div><div><label className="block text-sm font-medium text-gray-400 mb-2 text-left">Tu Reseña</label><textarea className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none resize-none h-24 text-sm" placeholder="Comentarios..." value={ratingData.review} onChange={e => setRatingData({...ratingData, review: e.target.value})} /></div><div><label className="block text-sm font-medium text-gray-400 mb-2 text-left">Fecha</label><input type="date" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none" value={ratingData.date} onChange={e => setRatingData({...ratingData, date: e.target.value})} required /></div><div className="flex gap-3 pt-2"><Button variant="ghost" onClick={() => setIsRateModalOpen(false)} className="flex-1 !py-3">Cancelar</Button><button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-3 rounded-lg font-bold text-base shadow-lg shadow-violet-900/20">{saving ? 'Guardando...' : 'Confirmar'}</button></div></form></div></div>}
       {isPlatformModalOpen && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6"><h3 className="text-xl font-bold text-white mb-4">Añadir Plataforma</h3><form onSubmit={(e) => { e.preventDefault(); if (newPlatformName.trim() && !platforms.includes(newPlatformName)) { setPlatforms([...platforms, newPlatformName]); setNewPlatformName(''); setIsPlatformModalOpen(false); } }}><input type="text" autoFocus placeholder="Ej: HBO Max..." className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white mb-4 focus:ring-2 focus:ring-violet-500 outline-none text-lg" value={newPlatformName} onChange={e => setNewPlatformName(e.target.value)} /><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setIsPlatformModalOpen(false)}>Cancelar</Button><Button type="submit" variant="primary" disabled={!newPlatformName.trim()}>Añadir</Button></div></form></div></div>}
