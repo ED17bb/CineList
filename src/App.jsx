@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut 
+} from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -18,7 +24,7 @@ import {
   Plus, Film, Tv, Trash2, CheckCircle, Star, Calendar, 
   Search, Filter, MonitorPlay, X, Edit2, LogOut, 
   Users, Cloud, Loader2, Settings, AlertTriangle, Hash,
-  Download, ArrowUp, ArrowDown, Move
+  Download, ArrowUp, ArrowDown, FileText, UserCircle
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
@@ -46,7 +52,7 @@ if (isConfigured) {
 
 // --- HOOKS Y HELPERS ---
 
-function useLongPress(callback = () => {}, ms = 3000) { // Default cambiado a 3000ms por seguridad
+function useLongPress(callback = () => {}, ms = 3000) { 
   const [startLongPress, setStartLongPress] = useState(false);
   const timerId = useRef();
 
@@ -91,7 +97,8 @@ const Button = ({ children, onClick, variant = 'primary', className = '', ...pro
     ghost: "text-gray-400 hover:text-white hover:bg-white/5",
     outline: "border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white",
     install: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-900/30 hover:brightness-110",
-    action: "bg-gray-700 hover:bg-gray-600 text-white shadow-lg border border-gray-600"
+    action: "bg-gray-700 hover:bg-gray-600 text-white shadow-lg border border-gray-600",
+    google: "bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-md" // Nuevo estilo Google
   };
   return (
     <button onClick={onClick} className={`${baseStyle} ${variants[variant] || variants.primary} ${className}`} {...props}>
@@ -118,9 +125,7 @@ const Badge = ({ children, color = 'gray' }) => {
 
 // --- SUB-COMPONENTE TARJETA ---
 const MediaCard = ({ item, activeTab, reorderModeId, handlers, searchQuery }) => {
-  // AUMENTADO A 3000ms (3 segundos) para evitar toques accidentales
   const longPressProps = useLongPress(() => handlers.onLongPress(item.id), 3000);
-
   const isInteractable = !reorderModeId && !searchQuery;
   const interactionProps = isInteractable ? longPressProps : {};
 
@@ -131,7 +136,6 @@ const MediaCard = ({ item, activeTab, reorderModeId, handlers, searchQuery }) =>
       onContextMenu={(e) => e.preventDefault()}
     >
       
-      {/* CAPA DE REORDENAMIENTO */}
       {reorderModeId === item.id && (
         <div className="absolute inset-0 z-50 bg-gray-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
           <p className="text-violet-300 font-bold text-lg mb-2">Mover</p>
@@ -236,6 +240,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [itemToRate, setItemToRate] = useState(null);
@@ -247,30 +252,47 @@ export default function App() {
   const [sortHistoryBy, setSortHistoryBy] = useState('date');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Estados Exportación
+  const [exportFilters, setExportFilters] = useState({ type: 'all', period: 'all' });
+
   // Formularios
   const [newItem, setNewItem] = useState({ title: '', type: 'series', platform: 'Netflix' });
   const [ratingData, setRatingData] = useState({ rating: 5, date: new Date().toISOString().split('T')[0], review: '' });
   const [newPlatformName, setNewPlatformName] = useState('');
   const [inputCode, setInputCode] = useState('');
 
-  // Auth
+  // AUTH: Google
   useEffect(() => {
     if (!isConfigured) return;
-    const initAuth = async () => {
-      try {
-        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-           await signInWithCustomToken(auth, window.__initial_auth_token);
-        } else {
-           await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth error:", error);
-        setAuthError(error.message);
+    // Escuchar cambios de sesión
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setAuthError(null);
+        // Si ya hay un usuario y un código guardado, intentar cargar
       }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
+    });
+    return () => unsubscribe();
   }, []);
+
+  const handleGoogleLogin = async () => {
+    setAuthError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Error Login:", error);
+      setAuthError("No se pudo iniciar sesión con Google. Revisa la consola.");
+    }
+  };
+
+  const handleSignOut = () => {
+    if (window.confirm("¿Cerrar sesión de Google?")) {
+      signOut(auth);
+      setListCode('');
+      localStorage.removeItem('cinelist_code');
+    }
+  };
 
   // Carga de datos
   useEffect(() => {
@@ -304,7 +326,7 @@ export default function App() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching:", error);
-      if(error.code === 'permission-denied') setAuthError("Permiso denegado.");
+      if(error.code === 'permission-denied') setAuthError("Permiso denegado. Revisa las reglas de Firestore.");
       setLoading(false);
     });
 
@@ -316,11 +338,7 @@ export default function App() {
     const currentIndex = items.findIndex(i => i.id === itemId);
     if (currentIndex === -1) return;
     
-    // Dirección: -1 es subir (hacia índices menores en la UI, pero mayor valor de 'order')
-    // Nota: La lista está ordenada descendente (B - A). El primer item tiene el order más alto.
-    // Subir visualmente = Ir hacia el índice 0 = Necesitamos un valor de 'order' más alto.
-    
-    const targetIndex = currentIndex + direction; // direction -1 para subir visualmente
+    const targetIndex = currentIndex + direction; 
     if (targetIndex < 0 || targetIndex >= items.length) return;
 
     const currentItem = items[currentIndex];
@@ -329,13 +347,11 @@ export default function App() {
     const currentOrderVal = currentItem.order ?? currentItem.createdAt?.seconds ?? Date.now();
     const targetOrderVal = targetItem.order ?? targetItem.createdAt?.seconds ?? Date.now();
 
-    // Intercambiamos los valores de orden
     try {
       const batch = writeBatch(db);
       const currentRef = doc(db, 'cinelist', currentItem.id);
       const targetRef = doc(db, 'cinelist', targetItem.id);
 
-      // Si los valores son iguales, ajustamos
       let newCurrentOrder = targetOrderVal;
       let newTargetOrder = currentOrderVal;
       
@@ -360,13 +376,57 @@ export default function App() {
     }
   };
 
+  // --- LÓGICA DE EXPORTACIÓN ---
+  const getAvailableMonths = () => {
+    const months = new Set();
+    items.forEach(item => {
+      if (item.status === 'watched' && item.watchedAt) {
+        months.add(item.watchedAt.substring(0, 7)); // YYYY-MM
+      }
+    });
+    return Array.from(months).sort().reverse(); 
+  };
+
+  const handleExport = () => {
+    const { type, period } = exportFilters;
+    let exportItems = items.filter(i => i.status === 'watched');
+
+    if (type !== 'all') exportItems = exportItems.filter(i => i.type === type);
+
+    let periodLabel = "LISTA ENTERA";
+    if (period !== 'all') {
+      exportItems = exportItems.filter(i => i.watchedAt && i.watchedAt.startsWith(period));
+      const [year, month] = period.split('-');
+      const monthName = new Date(year, month - 1).toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+      periodLabel = `${monthName} ${year}`;
+    }
+
+    if (exportItems.length === 0) return alert("No hay items para exportar con estos filtros.");
+
+    let content = `--- ${periodLabel} ---\n`;
+    content += `CineList by ED - Total: ${exportItems.length}\n\n`;
+    exportItems.forEach(item => { content += `${item.title} - ${item.rating}/10\n`; });
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CineList_${period === 'all' ? 'Completa' : period}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setIsExportModalOpen(false);
+  };
+
+  // --- OTRAS ACCIONES ---
+
   const addItemToCloud = async (e) => {
     e.preventDefault();
     if (!newItem.title.trim()) return;
     setSaving(true);
     try {
       const collectionRef = collection(db, 'cinelist');
-      // Nuevo item arriba (mayor orden)
       const maxOrder = items.length > 0 ? (items[0].order ?? items[0].createdAt?.seconds ?? Date.now()) : Date.now();
       
       if (isEditing && editingId) {
@@ -399,7 +459,7 @@ export default function App() {
     const code = inputCode.trim().toUpperCase(); localStorage.setItem('cinelist_code', code); setListCode(code);
   };
 
-  const handleLogoutList = () => { if (window.confirm("¿Salir?")) { localStorage.removeItem('cinelist_code'); setListCode(''); setItems([]); } };
+  const handleLogoutCode = () => { if (window.confirm("¿Salir de esta lista?")) { localStorage.removeItem('cinelist_code'); setListCode(''); setItems([]); } };
 
   const getFilteredItems = () => {
     let filtered = items.filter(i => {
@@ -417,26 +477,61 @@ export default function App() {
 
   const filteredItems = getFilteredItems();
 
-  // --- VISTAS ---
+  // --- VISTA: LOGIN / SELECCIÓN DE LISTA ---
 
-  if (!listCode) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
+      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl max-w-md w-full shadow-2xl">
           <div className="bg-gradient-to-tr from-violet-600 to-indigo-600 p-3 rounded-xl w-fit mx-auto mb-6"><Users size={32} className="text-white" /></div>
-          <h1 className="text-2xl font-bold text-white mb-2">Bienvenido a CineList by ED</h1>
-          <p className="text-gray-400 mb-8">Para empezar, crea un código único o ingresa el código de tu pareja.</p>
-          <form onSubmit={handleJoinList} className="space-y-4">
-            <div><label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Nombre de tu lista (Código)</label><input type="text" placeholder="Ej: ERNESTO-CASA" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg tracking-widest uppercase focus:ring-2 focus:ring-violet-500 outline-none placeholder-gray-700" value={inputCode} onChange={e => setInputCode(e.target.value)} /></div>
-            <Button type="submit" className="w-full py-3 px-6 text-lg">Entrar a la Lista</Button>
-          </form>
-          {deferredPrompt && <div className="mt-6 pt-6 border-t border-gray-800"><Button variant="install" onClick={handleInstallClick} className="w-full"><Download size={18} /> Instalar App</Button></div>}
-          {authError && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm animate-pulse"><p className="font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> Error de Autenticación:</p><p>{authError}</p></div>}
+          <h1 className="text-2xl font-bold text-white mb-2">CineList by ED</h1>
+          <p className="text-gray-400 mb-8">Inicia sesión para guardar tus listas de forma segura y permanente.</p>
+          
+          <Button variant="google" onClick={handleGoogleLogin} className="w-full py-3 px-6 text-lg justify-center">
+            {/* SVG Goolge Icon */}
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+            </svg>
+            Entrar con Google
+          </Button>
+
+          {authError && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm animate-pulse"><p className="font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> Error:</p><p>{authError}</p></div>}
         </div>
       </div>
     );
   }
 
+  // SI HAY USUARIO PERO NO CÓDIGO
+  if (!listCode) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
+        <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl max-w-md w-full shadow-2xl relative">
+          
+          <button onClick={handleSignOut} className="absolute top-4 right-4 text-gray-500 hover:text-white" title="Cerrar sesión">
+            <LogOut size={20}/>
+          </button>
+
+          <div className="flex flex-col items-center mb-6">
+             {user.photoURL ? <img src={user.photoURL} alt="User" className="w-16 h-16 rounded-full border-2 border-violet-500 mb-3" /> : <UserCircle size={64} className="text-violet-500 mb-3" />}
+             <h2 className="text-xl font-bold text-white">Hola, {user.displayName?.split(' ')[0]}</h2>
+             <p className="text-gray-400 text-sm">{user.email}</p>
+          </div>
+
+          <p className="text-gray-300 mb-6">Ingresa el código de la lista que quieres ver o crea una nueva.</p>
+          <form onSubmit={handleJoinList} className="space-y-4">
+            <div><input type="text" placeholder="Ej: ERNESTO-CASA" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-lg tracking-widest uppercase focus:ring-2 focus:ring-violet-500 outline-none placeholder-gray-700" value={inputCode} onChange={e => setInputCode(e.target.value)} /></div>
+            <Button type="submit" className="w-full py-3 px-6 text-lg">Entrar a la Lista</Button>
+          </form>
+          {deferredPrompt && <div className="mt-6 pt-6 border-t border-gray-800"><Button variant="install" onClick={handleInstallClick} className="w-full"><Download size={18} /> Instalar App</Button></div>}
+        </div>
+      </div>
+    );
+  }
+
+  // APP PRINCIPAL
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-violet-500/30 flex flex-col">
       {authError && <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2"><AlertTriangle size={18} />{authError}</div>}
@@ -449,7 +544,7 @@ export default function App() {
              </div>
              <div className="flex items-center gap-2">
                {deferredPrompt && <Button variant="install" onClick={handleInstallClick} className="!px-3 !py-2 text-xs sm:text-sm animate-pulse"><Download size={16} /> <span className="hidden sm:inline">Instalar</span></Button>}
-               <Button variant="ghost" onClick={handleLogoutList} className="text-red-400 hover:bg-red-500/10 hover:text-red-300 !px-3" title="Salir de la lista"><LogOut size={24} /></Button>
+               <Button variant="ghost" onClick={handleLogoutCode} className="text-red-400 hover:bg-red-500/10 hover:text-red-300 !px-3" title="Salir de la lista"><LogOut size={24} /></Button>
              </div>
           </div>
           <div className="flex items-center gap-3">
@@ -470,8 +565,23 @@ export default function App() {
               <button onClick={() => setFilterType('series')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterType === 'series' ? 'bg-violet-500/10 border-violet-500 text-violet-300' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}><Tv size={16} /> Series</button>
               <button onClick={() => setFilterType('movie')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterType === 'movie' ? 'bg-violet-500/10 border-violet-500 text-violet-300' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}><Film size={16} /> Películas</button>
             </div>
+            
             <div className="flex items-center gap-3 w-full md:w-auto">
-              {activeTab === 'history' && <div className="relative group"><select value={sortHistoryBy} onChange={(e) => setSortHistoryBy(e.target.value)} className="appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none w-full md:w-auto"><option value="date">Por Fecha</option><option value="rating">Por Nota</option></select><Filter size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" /></div>}
+              
+              {/* FILTROS DE HISTORIAL + BOTÓN EXPORTAR */}
+              {activeTab === 'history' && (
+                <div className="flex items-center gap-2">
+                  <div className="relative group">
+                    <select value={sortHistoryBy} onChange={(e) => setSortHistoryBy(e.target.value)} className="appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none w-full md:w-auto"><option value="date">Por Fecha</option><option value="rating">Por Nota</option></select>
+                    <Filter size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" />
+                  </div>
+                  {/* Botón Exportar */}
+                  <Button variant="secondary" onClick={() => setIsExportModalOpen(true)} className="!px-3 !py-2 h-full text-violet-300 border-violet-500/30 hover:bg-violet-500/10">
+                    <FileText size={18} />
+                  </Button>
+                </div>
+              )}
+
               <div className="relative flex-1 md:flex-none"><select value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value)} className="w-full appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none"><option value="all">Todas las plataformas</option>{platforms.map(p => <option key={p} value={p}>{p}</option>)}</select><MonitorPlay size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" /></div>
               <button onClick={() => setIsPlatformModalOpen(true)} className="text-xs text-violet-400 hover:text-violet-300 underline whitespace-nowrap">+ Plataforma</button>
             </div>
@@ -528,6 +638,7 @@ export default function App() {
       {isModalOpen && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white">{isEditing ? 'Editar Título' : 'Agregar a la lista compartida'}</h2><button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white"><X size={24} /></button></div><form onSubmit={addItemToCloud} className="space-y-4"><div><label className="block text-sm font-medium text-gray-400 mb-1">Título</label><input type="text" autoFocus className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none text-lg" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} required /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-400 mb-1">Tipo</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white outline-none focus:border-violet-500" value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value})}><option value="series">Serie</option><option value="movie">Película</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Plataforma</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white outline-none focus:border-violet-500" value={newItem.platform} onChange={e => setNewItem({...newItem, platform: e.target.value})}>{platforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div></div><div className="pt-4 flex gap-3"><Button variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1 !py-3">Cancelar</Button><button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 text-base">{saving ? <Loader2 className="animate-spin" size={20} /> : (isEditing ? 'Actualizar' : 'Guardar')}</button></div></form></div></div>}
       {isRateModalOpen && itemToRate && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center"><h2 className="text-2xl font-bold text-white mb-1">¿Qué tal estuvo?</h2><p className="text-gray-400 text-base mb-6">Califica <span className="text-violet-400 font-bold">{itemToRate.title}</span></p><form onSubmit={confirmRatingCloud} className="space-y-6"><div className="bg-gray-950 p-5 rounded-2xl border border-gray-800"><div className="flex justify-between items-center mb-4"><label className="text-sm font-medium text-gray-300">Puntuación</label><span className="text-4xl font-black text-yellow-400">{ratingData.rating}</span></div><input type="range" min="0" max="10" step="0.5" value={ratingData.rating} onChange={e => setRatingData({...ratingData, rating: Number(e.target.value)})} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500" /><div className="flex justify-between text-xs text-gray-500 mt-2 font-medium"><span>0 (Malísima)</span><span>10 (Obra Maestra)</span></div></div><div><label className="block text-sm font-medium text-gray-400 mb-2 text-left">Tu Reseña</label><textarea className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none resize-none h-24 text-sm" placeholder="Comentarios..." value={ratingData.review} onChange={e => setRatingData({...ratingData, review: e.target.value})} /></div><div><label className="block text-sm font-medium text-gray-400 mb-2 text-left">Fecha</label><input type="date" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none" value={ratingData.date} onChange={e => setRatingData({...ratingData, date: e.target.value})} required /></div><div className="flex gap-3 pt-2"><Button variant="ghost" onClick={() => setIsRateModalOpen(false)} className="flex-1 !py-3">Cancelar</Button><button type="submit" disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-4 py-3 rounded-lg font-bold text-base shadow-lg shadow-violet-900/20">{saving ? 'Guardando...' : 'Confirmar'}</button></div></form></div></div>}
       {isPlatformModalOpen && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6"><h3 className="text-xl font-bold text-white mb-4">Añadir Plataforma</h3><form onSubmit={(e) => { e.preventDefault(); if (newPlatformName.trim() && !platforms.includes(newPlatformName)) { setPlatforms([...platforms, newPlatformName]); setNewPlatformName(''); setIsPlatformModalOpen(false); } }}><input type="text" autoFocus placeholder="Ej: HBO Max..." className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white mb-4 focus:ring-2 focus:ring-violet-500 outline-none text-lg" value={newPlatformName} onChange={e => setNewPlatformName(e.target.value)} /><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setIsPlatformModalOpen(false)}>Cancelar</Button><Button type="submit" variant="primary" disabled={!newPlatformName.trim()}>Añadir</Button></div></form></div></div>}
+      {isExportModalOpen && <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><FileText size={20}/> Exportar Historial</h2><button onClick={() => setIsExportModalOpen(false)} className="text-gray-500 hover:text-white"><X size={24} /></button></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400 mb-1">Qué exportar</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500" value={exportFilters.type} onChange={e => setExportFilters({...exportFilters, type: e.target.value})}><option value="all">Todo (Series y Películas)</option><option value="series">Solo Series</option><option value="movie">Solo Películas</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Periodo</label><select className="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500" value={exportFilters.period} onChange={e => setExportFilters({...exportFilters, period: e.target.value})}><option value="all">Toda la historia</option>{getAvailableMonths().map(monthStr => { const [year, month] = monthStr.split('-'); const date = new Date(year, month - 1); return (<option key={monthStr} value={monthStr}>{date.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase()}</option>); })}</select></div><div className="pt-4 flex gap-3"><Button variant="secondary" onClick={() => setIsExportModalOpen(false)} className="flex-1">Cancelar</Button><Button type="submit" variant="primary" onClick={handleExport} className="flex-1"><Download size={18} /> Descargar TXT</Button></div></div></div></div>}
     </div>
   );
 }
