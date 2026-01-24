@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ) ---
+// Ernesto: Recuerda que para que el Login de Google funcione, 
+// debes haberlo activado en la consola de Firebase (Authentication > Google > Habilitar)
 const firebaseConfig = {
   apiKey: "AIzaSyD4Zs7YBFwLsPzto7S3UqI7PR9dLreRkK8",
   authDomain: "que-ver-4f4b6.firebaseapp.com",
@@ -98,7 +100,7 @@ const Button = ({ children, onClick, variant = 'primary', className = '', ...pro
     outline: "border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white",
     install: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-900/30 hover:brightness-110",
     action: "bg-gray-700 hover:bg-gray-600 text-white shadow-lg border border-gray-600",
-    google: "bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-md" // Nuevo estilo Google
+    google: "bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-md"
   };
   return (
     <button onClick={onClick} className={`${baseStyle} ${variants[variant] || variants.primary} ${className}`} {...props}>
@@ -135,7 +137,6 @@ const MediaCard = ({ item, activeTab, reorderModeId, handlers, searchQuery }) =>
       className="group bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-violet-900/10 hover:border-violet-500/30 transition-all duration-300 flex flex-col relative select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
-      
       {reorderModeId === item.id && (
         <div className="absolute inset-0 z-50 bg-gray-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
           <p className="text-violet-300 font-bold text-lg mb-2">Mover</p>
@@ -264,13 +265,9 @@ export default function App() {
   // AUTH: Google
   useEffect(() => {
     if (!isConfigured) return;
-    // Escuchar cambios de sesión
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        setAuthError(null);
-        // Si ya hay un usuario y un código guardado, intentar cargar
-      }
+      if (currentUser) setAuthError(null);
     });
     return () => unsubscribe();
   }, []);
@@ -567,7 +564,6 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-3 w-full md:w-auto">
-              
               {/* FILTROS DE HISTORIAL + BOTÓN EXPORTAR */}
               {activeTab === 'history' && (
                 <div className="flex items-center gap-2">
@@ -575,7 +571,6 @@ export default function App() {
                     <select value={sortHistoryBy} onChange={(e) => setSortHistoryBy(e.target.value)} className="appearance-none bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-violet-500 outline-none w-full md:w-auto"><option value="date">Por Fecha</option><option value="rating">Por Nota</option></select>
                     <Filter size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" />
                   </div>
-                  {/* Botón Exportar */}
                   <Button variant="secondary" onClick={() => setIsExportModalOpen(true)} className="!px-3 !py-2 h-full text-violet-300 border-violet-500/30 hover:bg-violet-500/10">
                     <FileText size={18} />
                   </Button>
